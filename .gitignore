@@ -1,0 +1,9 @@
+# Publish only README.md, EU AI Act JSON, and README screenshots to GitHub.
+# Everything else stays local.
+
+*
+
+!.gitignore
+!README.md
+!eu_ai_act_conformity_v1.json
+!porto*.png

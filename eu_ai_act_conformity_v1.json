@@ -1,0 +1,439 @@
+{
+  "report_metadata": {
+    "generated_at": "2026-06-09T12:11:43.937558",
+    "document_type": "Unified AI Report",
+    "compliance_standards": [
+      "Solvency II (EU Insurance Regulation)",
+      "EU AI Act (High-Risk AI Systems)",
+      "Responsible AI Framework"
+    ]
+  },
+  "model_details": {
+    "name": "Porto Seguro Insurance Claim Prediction - EBM",
+    "version": "1.0.0",
+    "date": "2026-06-09T12:11:43.937558",
+    "description": "Explainable Boosting Machine for predicting insurance claims",
+    "model_type": "Explainable Boosting Machine (EBM)",
+    "framework": "Microsoft InterpretML",
+    "architecture": "Polars + EBM",
+    "hyperparameters": {}
+  },
+  "intended_use": {
+    "primary_use": "Predict probability of insurance claim for policyholders",
+    "use_cases": [
+      "Risk assessment for insurance underwriting",
+      "Premium pricing optimization",
+      "Claim prediction for portfolio management"
+    ],
+    "out_of_scope": [
+      "Direct premium calculation (requires actuarial models)",
+      "Fraud detection (requires specialized models)",
+      "Legal or regulatory compliance decisions"
+    ],
+    "users": "Insurance underwriters, actuaries, risk managers"
+  },
+  "training_data": {
+    "dataset": "Porto Seguro Safe Driver Prediction",
+    "source": "Kaggle Competition",
+    "source_file": "train.csv",
+    "records": 595212,
+    "features": 57,
+    "target_distribution": {
+      "1": {
+        "count": 21694,
+        "proportion": 0.036448
+      },
+      "0": {
+        "count": 573518,
+        "proportion": 0.963552
+      }
+    },
+    "positive_class_rate": 0.036448,
+    "train_test_split": "80/20 stratified (hold-out test, seed=42)",
+    "data_quality_score": 0.7797,
+    "missing_value_columns": 13
+  },
+  "performance_metrics": {
+    "roc_auc": 0.6390838050251636,
+    "f1_score": 0.11671181250736073,
+    "precision": 0.07838329510401013,
+    "recall": 0.2283936390873473,
+    "accuracy": 0.8739951110103072,
+    "evaluation_method": "Train-test split and/or cross-validation"
+  },
+  "explainability_compliance": {
+    "global_explanations": "Available",
+    "local_explanations": "Available",
+    "feature_interactions": "Available",
+    "explainability_method": "Native EBM explainability with optional SHAP/LIME fallback",
+    "compliance_status": "Compliant",
+    "summary": {
+      "global": "EBM native",
+      "local": "EBM native",
+      "interactions": "EBM native"
+    }
+  },
+  "solvency_ii_compliance": {
+    "risk_management": "Model explainability enables risk assessment",
+    "governance": "Model documentation and monitoring in place",
+    "validation": "Model performance validated on test set",
+    "compliance_status": "Compliant"
+  },
+  "eu_ai_act_compliance": {
+    "risk_category": "High-risk (insurance decision-making)",
+    "transparency": "Native explainability provided",
+    "human_oversight": "Model supports human-in-the-loop decisions",
+    "accuracy_robustness": "ROC-AUC: 0.6391",
+    "compliance_status": "Compliant"
+  },
+  "responsible_ai_compliance": {
+    "fairness": {
+      "audit_date": "2026-06-09T12:11:43.229544",
+      "demographic_parity": {
+        "overall_parity": true,
+        "attribute_tests": {
+          "risk_proxy_ps_ind_03": {
+            "attribute": "risk_proxy_ps_ind_03",
+            "groups": {
+              "above_median": {
+                "positive_rate": 0.05235510418490632,
+                "sample_size": 5711,
+                "positive_count": 299
+              },
+              "below_median": {
+                "positive_rate": 0.05129400792725577,
+                "sample_size": 4289,
+                "positive_count": 220
+              }
+            },
+            "parity_met": true,
+            "max_difference": 0.0010610962576505512,
+            "statistical_test": {
+              "skipped": false,
+              "chi2_statistic": 0.03655750486276397,
+              "p_value": 0.8483687707292257,
+              "significant": false
+            }
+          },
+          "region_proxy_ps_reg_03": {
+            "attribute": "region_proxy_ps_reg_03",
+            "groups": {
+              "high": {
+                "positive_rate": 0.07045601901880268,
+                "sample_size": 4627,
+                "positive_count": 326
+              },
+              "mid": {
+                "positive_rate": 0.0432674375233122,
+                "sample_size": 2681,
+                "positive_count": 116
+              },
+              "low": {
+                "positive_rate": 0.028603268945022287,
+                "sample_size": 2692,
+                "positive_count": 77
+              }
+            },
+            "parity_met": true,
+            "max_difference": 0.04185275007378039,
+            "statistical_test": {
+              "skipped": false,
+              "chi2_statistic": 66.1303676534817,
+              "p_value": 4.36488816523632e-15,
+              "significant": true
+            }
+          },
+          "vehicle_proxy_ps_car_13": {
+            "attribute": "vehicle_proxy_ps_car_13",
+            "groups": {
+              "above_median": {
+                "positive_rate": 0.0816,
+                "sample_size": 5000,
+                "positive_count": 408
+              },
+              "below_median": {
+                "positive_rate": 0.0222,
+                "sample_size": 5000,
+                "positive_count": 111
+              }
+            },
+            "parity_met": true,
+            "max_difference": 0.05940000000000001,
+            "statistical_test": {
+              "skipped": false,
+              "chi2_statistic": 178.0581749646743,
+              "p_value": 1.2865064069891055e-40,
+              "significant": true
+            }
+          }
+        },
+        "violations": [],
+        "recommendations": []
+      },
+      "equalized_odds": {
+        "overall_equality": true,
+        "attribute_tests": {
+          "risk_proxy_ps_ind_03": {
+            "attribute": "risk_proxy_ps_ind_03",
+            "groups": {
+              "below_median": {
+                "tpr": 0.21476510067114093,
+                "fpr": 0.04541062801932367,
+                "sample_size": 4289,
+                "confusion_matrix": {
+                  "tp": 32,
+                  "fp": 188,
+                  "tn": 3952,
+                  "fn": 117
+                }
+              },
+              "above_median": {
+                "tpr": 0.2222222222222222,
+                "fpr": 0.04625430799927444,
+                "sample_size": 5711,
+                "confusion_matrix": {
+                  "tp": 44,
+                  "fp": 255,
+                  "tn": 5258,
+                  "fn": 154
+                }
+              }
+            },
+            "equality_met": true,
+            "tpr_difference": 0.007457121551081275,
+            "fpr_difference": 0.0008436799799507733
+          },
+          "region_proxy_ps_reg_03": {
+            "attribute": "region_proxy_ps_reg_03",
+            "groups": {
+              "low": {
+                "tpr": 0.2077922077922078,
+                "fpr": 0.023326959847036328,
+                "sample_size": 2692,
+                "confusion_matrix": {
+                  "tp": 16,
+                  "fp": 61,
+                  "tn": 2554,
+                  "fn": 61
+                }
+              },
+              "mid": {
+                "tpr": 0.16326530612244897,
+                "fpr": 0.03871467286101433,
+                "sample_size": 2681,
+                "confusion_matrix": {
+                  "tp": 16,
+                  "fp": 100,
+                  "tn": 2483,
+                  "fn": 82
+                }
+              },
+              "high": {
+                "tpr": 0.2558139534883721,
+                "fpr": 0.0632996632996633,
+                "sample_size": 4627,
+                "confusion_matrix": {
+                  "tp": 44,
+                  "fp": 282,
+                  "tn": 4173,
+                  "fn": 128
+                }
+              }
+            },
+            "equality_met": true,
+            "tpr_difference": 0.09254864736592314,
+            "fpr_difference": 0.039972703452626976
+          },
+          "vehicle_proxy_ps_car_13": {
+            "attribute": "vehicle_proxy_ps_car_13",
+            "groups": {
+              "below_median": {
+                "tpr": 0.16312056737588654,
+                "fpr": 0.0181107223708582,
+                "sample_size": 5000,
+                "confusion_matrix": {
+                  "tp": 23,
+                  "fp": 88,
+                  "tn": 4771,
+                  "fn": 118
+                }
+              },
+              "above_median": {
+                "tpr": 0.25728155339805825,
+                "fpr": 0.07405089695452649,
+                "sample_size": 5000,
+                "confusion_matrix": {
+                  "tp": 53,
+                  "fp": 355,
+                  "tn": 4439,
+                  "fn": 153
+                }
+              }
+            },
+            "equality_met": true,
+            "tpr_difference": 0.09416098602217171,
+            "fpr_difference": 0.05594017458366829
+          }
+        },
+        "violations": []
+      },
+      "overall_compliance": true,
+      "classification_threshold": 0.06218303673820481,
+      "audit_valid": true,
+      "prediction_summary": {
+        "positive_prediction_rate": 0.0519,
+        "unique_score_count": 9985
+      },
+      "note": "Audit uses proxies derived from anonymized features (Porto Seguro does not include real age/gender). Replace with real protected attributes in production.",
+      "proxy_attributes": true
+    },
+    "transparency": "Full explainability provided",
+    "accountability": "Model decisions are traceable",
+    "robustness": {
+      "governance_tests_passed": null,
+      "robustness_passed": true,
+      "robustness_results": {
+        "validation_date": "2026-06-08T22:18:28.454192",
+        "cross_validation": {
+          "n_splits": 5,
+          "metrics": {
+            "roc_auc": {
+              "test_mean": 0.6010683506970418,
+              "test_std": 0.025367608961699147,
+              "test_scores": [
+                0.6027302147690496,
+                0.5879140923801117,
+                0.56465118430792,
+                0.6418740747594375,
+                0.6081721872686898
+              ],
+              "train_mean": 0.7766027523302554,
+              "train_std": 0.021091487845174523,
+              "overfitting": 0.17553440163321365
+            },
+            "f1": {
+              "test_mean": 0.007142857142857143,
+              "test_std": 0.014285714285714285,
+              "test_scores": [
+                0.03571428571428571,
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              "train_mean": 0.003587443946188341,
+              "train_std": 0.004393703574498974,
+              "overfitting": -0.003555413196668802
+            },
+            "precision": {
+              "test_mean": 0.2,
+              "test_std": 0.4000000000000001,
+              "test_scores": [
+                1.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              "train_mean": 0.4,
+              "train_std": 0.48989794855663565,
+              "overfitting": 0.2
+            },
+            "recall": {
+              "test_mean": 0.0036363636363636364,
+              "test_std": 0.007272727272727273,
+              "test_scores": [
+                0.01818181818181818,
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              "train_mean": 0.0018018018018018018,
+              "train_std": 0.002206747516020881,
+              "overfitting": -0.0018345618345618345
+            }
+          },
+          "fold_results": [
+            {
+              "fold": 1,
+              "test_roc_auc": 0.6027302147690496,
+              "test_f1": 0.03571428571428571,
+              "train_roc_auc": 0.8035392396645737
+            },
+            {
+              "fold": 2,
+              "test_roc_auc": 0.5879140923801117,
+              "test_f1": 0.0,
+              "train_roc_auc": 0.7409607897371341
+            },
+            {
+              "fold": 3,
+              "test_roc_auc": 0.56465118430792,
+              "test_f1": 0.0,
+              "train_roc_auc": 0.7907745881200074
+            },
+            {
+              "fold": 4,
+              "test_roc_auc": 0.6418740747594375,
+              "test_f1": 0.0,
+              "train_roc_auc": 0.7713646796683379
+            },
+            {
+              "fold": 5,
+              "test_roc_auc": 0.6081721872686898,
+              "test_f1": 0.0,
+              "train_roc_auc": 0.7763744644612239
+            }
+          ]
+        },
+        "adversarial_testing": {
+          "baseline_auc": 0.6709897252306007,
+          "perturbation_ratio": 0.1,
+          "tests": [
+            {
+              "test_name": "random_noise_perturbation",
+              "auc": 0.6696612853593917,
+              "degradation": 0.0013284398712090084,
+              "robust": true
+            },
+            {
+              "test_name": "feature_dropout",
+              "auc": 0.6443383693963479,
+              "degradation": 0.02665135583425282,
+              "robust": true
+            }
+          ],
+          "overall_robust": true,
+          "max_degradation": 0.02665135583425282
+        },
+        "test_set_performance": {
+          "roc_auc": 0.6709897252306007,
+          "f1_score": 0.0,
+          "precision": 0.0,
+          "recall": 0.0
+        }
+      }
+    },
+    "privacy": "No personal data in model features",
+    "drift_monitoring": {
+      "status": "Compliant",
+      "overall_status": "healthy",
+      "monitoring_passed": true,
+      "evidence_file": "docs\\drift_monitoring_latest.json",
+      "monitoring_module": "src.monitoring.production_compliance_gate",
+      "last_monitored_at": "2026-06-08T22:33:32.335440",
+      "data_drift_detected": false,
+      "model_drift_detected": false,
+      "alerts": [],
+      "summary": "Evaluated continuously via production_compliance_gate. See drift_monitoring_latest.json for current status."
+    },
+    "compliance_status": "Compliant"
+  },
+  "recommendations": [
+    "Monitor model performance in production",
+    "Regular retraining with updated data",
+    "Maintain explainability reports for audits",
+    "Document model decisions for regulatory compliance"
+  ]
+}

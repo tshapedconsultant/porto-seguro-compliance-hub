@@ -158,7 +158,7 @@ This project is a **production-oriented Responsible AI reference architecture** 
 
 - **Demo:** `streamlit run app.py` — walk through the Compliance Hub live
 - **Evidence pack:** `eu_ai_act_conformity_v1.json`
-- **Contact:** open an issue in this repository or reach out via LinkedIn / email on your portfolio site
+- **Contact:** [Andrés Lage Freire on LinkedIn](https://www.linkedin.com/in/andres-lage-freire-4562a91b1) · open an issue in this repository
 
 ---
 

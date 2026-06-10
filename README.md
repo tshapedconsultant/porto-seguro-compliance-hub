@@ -2,6 +2,66 @@
 
 > **Production-oriented Responsible AI reference architecture for highly regulated industries.** Built to pass technical due diligence from compliance, risk management, and cybersecurity stakeholders under the **EU AI Act** and **Solvency II** frameworks.
 
+## Executive Architecture
+
+Single-stack view for C-suite, compliance, and risk committees — five layers, one audit trail.
+
+```mermaid
+flowchart TB
+    subgraph DATA["① DATA LAYER"]
+        direction LR
+        D1["Porto Seguro · 595K policies"]
+        D2["Polars ingestion & validation"]
+        D3["Art. 10 — dataset traceability"]
+    end
+
+    subgraph MODEL["② MODEL LAYER"]
+        direction LR
+        M1["EBM glass-box classifier"]
+        M2["Native explainability"]
+        M3["Optimal threshold · hold-out test"]
+    end
+
+    subgraph GOV["③ GOVERNANCE LAYER"]
+        direction LR
+        G1["Bias audit · proxy fairness"]
+        G2["Adversarial robustness · Art. 15"]
+        G3["Human oversight routing · Art. 14"]
+    end
+
+    subgraph MON["④ MONITORING LAYER"]
+        direction LR
+        N1["KS drift · asymmetric alerts"]
+        N2["Shadow Monitor · off hot path"]
+        N3["Production compliance gate · Art. 9"]
+    end
+
+    subgraph EVD["⑤ EVIDENCE LAYER"]
+        direction LR
+        E1["JSON audit packs"]
+        E2["Streamlit Model Card"]
+        E3["CI/CD deploy gate"]
+    end
+
+    DATA ==> MODEL ==> GOV ==> MON ==> EVD
+
+    style DATA fill:#e8f4fc,stroke:#1a73e8
+    style MODEL fill:#e6f4ea,stroke:#34a853
+    style GOV fill:#fef7e0,stroke:#f9ab00
+    style MON fill:#fce8e6,stroke:#ea4335
+    style EVD fill:#f3e8fd,stroke:#9334e6
+```
+
+| Layer | Business question | Regulatory anchor |
+|-------|-------------------|-------------------|
+| **Data** | Is the training data complete, representative, and leakage-free? | EU AI Act **Art. 10** |
+| **Model** | Can we explain every prediction to an underwriter or auditor? | EU AI Act **Art. 13** |
+| **Governance** | Is the model fair, robust, and subject to human review? | **Art. 14** · **Art. 15** |
+| **Monitoring** | Do we detect drift before it harms the portfolio? | EU AI Act **Art. 9** |
+| **Evidence** | Can we prove compliance to regulators and Solvency II? | **Annex IV** · Solvency II |
+
+---
+
 ![Model Overview and Metadata Card](porto9.png)
 
 ---

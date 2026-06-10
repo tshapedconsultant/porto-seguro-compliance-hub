@@ -60,6 +60,24 @@ flowchart TB
 | **Monitoring** | Do we detect drift before it harms the portfolio? | EU AI Act **Art. 9** |
 | **Evidence** | Can we prove compliance to regulators and Solvency II? | **Annex IV** · Solvency II |
 
+### Threat & Governance Scope
+
+**Threats addressed**
+
+- Data drift
+- Model degradation
+- Fairness regressions
+- Documentation gaps
+- Auditability failures
+- Human oversight failures
+
+**Out of scope**
+
+- Adversarial prompt injection
+- Agentic AI runtime controls
+- LLM security threats
+- Supply-chain security
+
 ---
 
 ![Model Overview and Metadata Card](porto9.png)

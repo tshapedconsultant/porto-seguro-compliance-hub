@@ -1,6 +1,6 @@
 # Porto Seguro — Responsible AI Compliance Hub
 
-> **Production-oriented Responsible AI reference architecture for highly regulated industries.** Built to pass technical due diligence from compliance, risk management, and cybersecurity stakeholders under the **EU AI Act** and **Solvency II** frameworks.
+> **Production-oriented Responsible AI reference architecture for highly regulated industries.** Designed to support technical due diligence and AI governance assessments from compliance, risk management, and cybersecurity stakeholders under the **EU AI Act** and **Solvency II** frameworks.
 
 ## Executive Architecture
 
@@ -214,7 +214,7 @@ streamlit run app.py
 
 ## Let's Talk
 
-This project is a **production-oriented Responsible AI reference architecture** for regulated industries — built to pass technical due diligence from compliance, actuarial, and cybersecurity stakeholders.
+This project is a **production-oriented Responsible AI reference architecture** for regulated industries — designed to support technical due diligence and AI governance assessments from compliance, actuarial, and cybersecurity stakeholders.
 
 - **Demo:** `streamlit run app.py` — walk through the Compliance Hub live
 - **Evidence pack:** `eu_ai_act_conformity_v1.json`

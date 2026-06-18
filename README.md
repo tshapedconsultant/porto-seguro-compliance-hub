@@ -1,6 +1,6 @@
 # Porto Seguro — Responsible AI Compliance Hub
 
-> **Production-oriented Responsible AI reference architecture for highly regulated industries.** Designed to support technical due diligence and AI governance assessments from compliance, risk management, and cybersecurity stakeholders under the **EU AI Act** and **Solvency II** frameworks.
+> **Production-oriented Responsible AI  vendor agnostic reference architecture for highly regulated industries.** Designed to support technical due diligence and AI governance assessments from compliance, risk management, and cybersecurity stakeholders under the **EU AI Act** and **Solvency II** frameworks.
 
 ## Executive Architecture
 

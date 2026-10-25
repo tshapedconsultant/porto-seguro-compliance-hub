@@ -1,0 +1,270 @@
+{
+  "document_type": "DPIA / EIPD",
+  "legal_framework": [
+    "Regulation (EU) 2016/679 (GDPR / RGPD)",
+    "Article 35 GDPR — Data Protection Impact Assessment",
+    "Article 5 GDPR — Principles",
+    "Articles 12–22 GDPR — Data subject rights",
+    "Article 22 GDPR — Automated individual decision-making",
+    "EDPB WP248 rev.01 — Guidelines on DPIA",
+    "AEPD — Guía práctica para las Evaluaciones de Impacto en la Protección de los Datos",
+    "AEPD — Lista de tipos de tratamientos que requieren EIPD"
+  ],
+  "disclaimer": {
+    "status": "reference_architecture_demonstration",
+    "not_a_supervisory_notification": true,
+    "not_article_36_prior_consultation": true,
+    "audience": "AEPD innovation lab / technical due diligence",
+    "text_es": "Este documento es una EIPD de arquitectura de referencia para un laboratorio de innovación. No constituye una notificación a la autoridad de control ni una consulta previa del artículo 36 RGPD. El conjunto de datos de demostración es el de la competición Kaggle Porto Seguro (variables anonimizadas ps_*). Un responsable real que trate datos personales identificables para suscripción debería elaborar y firmar su propia EIPD sobre su tratamiento."
+  },
+  "metadata": {
+    "version": "1.0.0",
+    "generated_at": "2026-10-25",
+    "review_cadence": "annual or upon material model/data change",
+    "language": "en",
+    "repository": "https://github.com/tshapedconsultant/porto-seguro-compliance-hub",
+    "system": "Porto Seguro Responsible AI Compliance Hub",
+    "supervisory_authority_for_spanish_demo_context": "Agencia Española de Protección de Datos (AEPD)"
+  },
+  "roles": {
+    "controller_hypothetical": {
+      "name": "Porto Seguro Compliance Hub (demo controller)",
+      "role": "controller (Art. 4(7) analogue)",
+      "note": "Hypothetical for the lab walkthrough. No live insurance book is processed here."
+    },
+    "processor": "none in this demo (single local stack)",
+    "dpo_consultation": {
+      "status": "placeholder_for_production",
+      "required_in_production": true,
+      "article": "Art. 35(2) GDPR"
+    },
+    "sign_off": {
+      "dpo": "pending — demonstration",
+      "controller_representative": "pending — demonstration",
+      "date": null
+    }
+  },
+  "processing_description": {
+    "name": "Insurance claim probability scoring (underwriting decision support)",
+    "purposes": [
+      "Estimate P(claim) for a policyholder record to support underwriting and portfolio risk review",
+      "Produce native glass-box explanations for a human reviewer",
+      "Emit audit evidence (metrics, bias proxies, drift, artifact hashes)"
+    ],
+    "out_of_scope": [
+      "Autonomous premium setting",
+      "Fully automated rejection of a contract without human review (production must not do this)",
+      "Fraud investigation",
+      "Processing of special-category data (Art. 9) — not collected in this demo"
+    ],
+    "data_subjects": "In production: policyholders and applicants. In this demo: no identifiable natural persons; Kaggle anonymized tabular rows.",
+    "data_categories": {
+      "demo_dataset": "Porto Seguro Safe Driver Prediction (Kaggle)",
+      "records": 595212,
+      "features": 57,
+      "prefixes": {
+        "ps_ind_*": "individual / policyholder attributes (anonymized)",
+        "ps_reg_*": "regional attributes (anonymized)",
+        "ps_car_*": "vehicle attributes (anonymized)",
+        "ps_calc_*": "pre-calculated attributes"
+      },
+      "direct_identifiers": "none in the demo file",
+      "special_categories_art_9": "not collected",
+      "sensitive_proxies": "Engineered frequency encodings and regional products may correlate with socio-economic or geographic groups; audited as proxies, not as protected attributes."
+    },
+    "recipients": "Local Streamlit / FastAPI demo operators only. No third-country transfer in this stack.",
+    "retention": "Demo artifacts retained for reproducibility (model pkl, SHA-256 sidecars, JSON packs). Production must define a retention schedule (Art. 5(1)(e)).",
+    "international_transfers": "none",
+    "legal_basis": {
+      "demo": {
+        "position": "If the competition dataset is irreversibly anonymised (Recital 26 GDPR), the GDPR does not apply to those records. This EIPD is still maintained as the template a controller would need when the same pipeline processes personal data.",
+        "article": "Recital 26; Art. 35 as design control"
+      },
+      "production_analogue": {
+        "candidate_bases": [
+          "Art. 6(1)(b) — performance of an insurance contract / pre-contractual steps",
+          "Art. 6(1)(f) — legitimate interests of the insurer in risk selection, subject to balancing test and Art. 21 objection"
+        ],
+        "not_used_here": "No production legal basis is asserted for this repository."
+      }
+    }
+  },
+  "why_dpia_is_required": {
+    "article_35_1": "Processing likely to result in a high risk to rights and freedoms — production analogue: large-scale scoring of applicants.",
+    "article_35_3_a": "Systematic and extensive evaluation of personal aspects based on automated processing, including profiling, on which decisions are based that produce legal effects or similarly significantly affect the person (underwriting / pricing analogue).",
+    "aepd_list": "Insurance scoring / profiling of applicants is the type of processing typically covered by the AEPD list of treatments requiring an EIPD. Confirm against the current published list before any live filing.",
+    "scale": "595,212 records in the reference dataset.",
+    "demo_nuance": "This repository does not take automated legal decisions on real people. The EIPD exists so the lab can inspect the control design that would sit in front of such a decision."
+  },
+  "necessity_and_proportionality": {
+    "purpose_limitation_art_5_1_b": "Single purpose: claim-probability decision support and compliance evidence. Not reused for marketing or unrelated profiling in this stack.",
+    "data_minimisation_art_5_1_c": "No names, contact data, national ID, or Art. 9 attributes ingested. Features are already hashed/anonymized by the dataset publisher. Pipeline does not re-identify.",
+    "accuracy_art_5_1_d": "Hold-out ROC-AUC ~0.639 (realistic for this imbalance). Threshold tuned on train only. Accuracy ~87% is not used as a success metric.",
+    "storage_limitation_art_5_1_e": "Demo: artifacts for audit replay. Production: define deletion aligned with insurance retention law.",
+    "integrity_confidentiality_art_5_1_f": "SHA-256 sidecars on model and feature-engineer pickles; Docker read-only artifact mount; no secrets in the demo repo.",
+    "accountability_art_5_2": "JSON evidence packs, Streamlit Model Card, audit_results.json, this DPIA pack."
+  },
+  "data_subject_rights": {
+    "information_art_13_14": "Model Card + this DPIA describe purpose, logic (EBM additive terms), and human review. Production privacy notice would cite this pack.",
+    "access_art_15": "Local explanation for a scored record (log-odds contributions). Production must bind explanation to a data-subject identifier — not present in the demo file.",
+    "rectification_art_16": "Feature pipeline is deterministic from input row; correction is a data-quality process upstream.",
+    "erasure_art_17": "Demo has no identity index. Production must support deletion of scores and training copies where legally required.",
+    "objection_art_21": "Production legitimate-interest scoring must honour objection. Demo does not run a live objection channel.",
+    "automated_decisions_art_22": {
+      "position": "Production must not take a solely automated decision with legal or similarly significant effects without a valid Art. 22(2) exception and safeguards (Art. 22(3)): human intervention, contest, explanation.",
+      "implementation_in_this_repo": [
+        "Model output is advisory (see EU AI Act Art. 14 mapping and Business Context threshold routing)",
+        "Native EBM local contributions (not a post-hoc SHAP story) support the right to obtain meaningful information about the logic involved",
+        "Human oversight routing for borderline scores"
+      ]
+    }
+  },
+  "risk_register": [
+    {
+      "id": "R1",
+      "risk": "Unfair scoring via geographic or behavioural proxies although Art. 9 attributes are not collected",
+      "rights_impacted": ["Art. 5(1)(a) fairness", "non-discrimination analogue"],
+      "likelihood": 3,
+      "severity": 4,
+      "inherent_score": 12,
+      "mitigations": [
+        "Proxy bias audit on ps_ind_03, ps_reg_03, ps_car_13 (demographic parity / equal opportunity)",
+        "No protected-attribute collection by design"
+      ],
+      "residual_likelihood": 2,
+      "residual_severity": 3,
+      "residual_score": 6,
+      "status": "accepted_with_monitoring"
+    },
+    {
+      "id": "R2",
+      "risk": "Data drift silently degrades a subgroup and changes claim scores",
+      "rights_impacted": ["Art. 5(1)(d) accuracy"],
+      "likelihood": 3,
+      "severity": 4,
+      "inherent_score": 12,
+      "mitigations": [
+        "KS / PSI drift monitor (Art. 9 EU AI Act analogue)",
+        "Shadow monitor off the hot path",
+        "Production compliance gate"
+      ],
+      "residual_likelihood": 2,
+      "residual_severity": 3,
+      "residual_score": 6,
+      "status": "accepted_with_monitoring"
+    },
+    {
+      "id": "R3",
+      "risk": "Residual re-identification if a production extract were joined with external files",
+      "rights_impacted": ["Art. 5(1)(c)", "confidentiality"],
+      "likelihood": 2,
+      "severity": 5,
+      "inherent_score": 10,
+      "mitigations": [
+        "Demo uses publisher-anonymized columns only",
+        "No identity keys in artifacts",
+        "Read-only model mounts in docker-compose"
+      ],
+      "residual_likelihood": 1,
+      "residual_severity": 4,
+      "residual_score": 4,
+      "status": "accepted_in_demo"
+    },
+    {
+      "id": "R4",
+      "risk": "Over-reliance on the score (automation bias) without contestability",
+      "rights_impacted": ["Art. 22", "Art. 15"],
+      "likelihood": 4,
+      "severity": 4,
+      "inherent_score": 16,
+      "mitigations": [
+        "Human oversight / advisory use",
+        "Glass-box local explanations on log-odds scale",
+        "Documented optimal threshold vs default 0.5"
+      ],
+      "residual_likelihood": 2,
+      "residual_severity": 3,
+      "residual_score": 6,
+      "status": "accepted_with_human_review"
+    },
+    {
+      "id": "R5",
+      "risk": "Integrity failure (wrong or tampered model artifact in production)",
+      "rights_impacted": ["Art. 5(1)(f)", "Art. 32"],
+      "likelihood": 2,
+      "severity": 4,
+      "inherent_score": 8,
+      "mitigations": [
+        "SHA-256 sidecars for ebm_model_v1.pkl and feature_engineer_v1.pkl",
+        "Audit JSON timestamps"
+      ],
+      "residual_likelihood": 1,
+      "residual_severity": 3,
+      "residual_score": 3,
+      "status": "accepted"
+    }
+  ],
+  "residual_risk_summary": {
+    "overall": "medium",
+    "scale_note": "Scores are likelihood × severity (1–5). Residual scores 3–6 after controls.",
+    "article_36": "Prior consultation with the AEPD is not triggered by this demonstration. A live controller would reassess residual high risk after mitigations before any Art. 36 filing.",
+    "human_intervention": "required"
+  },
+  "mitigations_in_code": [
+    {
+      "control": "Anonymized feature set; no Art. 9 attributes",
+      "evidence": "train.csv schema; README privacy-by-design fairness"
+    },
+    {
+      "control": "Proxy fairness audit",
+      "evidence": "docs/audit_results.json bias_audit; pages/04_Compliance.py"
+    },
+    {
+      "control": "Glass-box EBM local/global explanations",
+      "evidence": "pages/03_Explainability.py; src/models/interpret_bridge.py"
+    },
+    {
+      "control": "Polars last-millisecond bridge (no extra copies of identity data)",
+      "evidence": "src/models/interpret_bridge.py"
+    },
+    {
+      "control": "Human oversight / threshold routing",
+      "evidence": "pages/05_Business_Context.py; pages/06_EU_AI_Act.py Art. 14"
+    },
+    {
+      "control": "Drift / Art. 9 analogue gate",
+      "evidence": "pages/07_Drift_Monitoring.py; docs/drift_monitoring_latest.json"
+    },
+    {
+      "control": "Artifact integrity",
+      "evidence": "models/artifacts/*.sha256"
+    }
+  ],
+  "gdpr_eu_ai_act_crosswalk": [
+    {
+      "gdpr": "Art. 5(1)(c) minimisation / Recital 26 anonymisation",
+      "eu_ai_act": "Art. 10 data governance",
+      "this_repo": "Anonymized Kaggle schema; Polars validation; train-only feature engineer fit"
+    },
+    {
+      "gdpr": "Art. 12–15 information and access; Art. 22(3) explanation of logic",
+      "eu_ai_act": "Art. 13 transparency",
+      "this_repo": "Native EBM explain_local / explain_global; Model Card"
+    },
+    {
+      "gdpr": "Art. 22 human intervention",
+      "eu_ai_act": "Art. 14 human oversight",
+      "this_repo": "Advisory scores; threshold routing to underwriter review"
+    },
+    {
+      "gdpr": "Art. 5(1)(d) accuracy; Art. 32 security of processing",
+      "eu_ai_act": "Art. 15 accuracy, robustness, cybersecurity",
+      "this_repo": "Hold-out metrics; adversarial tests; SHA-256; read-only mounts"
+    },
+    {
+      "gdpr": "Art. 35 EIPD; Art. 5(2) accountability",
+      "eu_ai_act": "Art. 9 risk management; Annex IV technical documentation",
+      "this_repo": "This pack + eu_ai_act_conformity_v1.json + Streamlit evidence pages"
+    }
+  ]
+}

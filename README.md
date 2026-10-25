@@ -89,6 +89,7 @@ flowchart TB
 | Service | Command | URL |
 |---------|---------|-----|
 | **Model Card Dashboard** | `streamlit run app.py` | `http://localhost:8501` |
+| **DPIA / EIPD (GDPR Art. 35)** | sidebar **DPIA GDPR** | `http://localhost:8501` |
 | **Inference API Gateway** | `python api_server.py` | `http://localhost:8000` |
 | **Compliance Monitor** | `POST /compliance/monitor` | `http://localhost:8000/compliance/monitor` |
 
@@ -135,6 +136,7 @@ The architecture automatically materializes audit logs into automated cryptograp
 | `docs/drift_monitoring_latest.json` | Latest data drift gate check (Art. 9) |
 | `docs/robustness_results.json` | Adversarial red teaming and noise tests (Art. 15) |
 | `eu_ai_act_conformity_v1.json` | Exportable conformity declaration (from Compliance tab) |
+| `gdpr_dpia_v1.json` | GDPR Art. 35 DPIA / EIPD pack (AEPD innovation-lab walkthrough; not a supervisory filing) |
 | `training_results.json` | Hold-out metrics + optimal threshold parameters |
 | `monitoring/performance_history.json` | Production ROC-AUC historical logs |
 
@@ -193,6 +195,7 @@ porto-seguro/
 ├── run_training.py                 # Full MLOps pipeline
 ├── run_production_monitor.py       # Recurring Art. 9 monitor
 ├── eu_ai_act_conformity_v1.json    # Exportable conformity declaration
+├── gdpr_dpia_v1.json               # GDPR Art. 35 DPIA / EIPD evidence pack
 ├── src/
 │   ├── data_processing/            # Polars: load, FE, validation
 │   ├── models/                     # EBM, evaluation, explainability
@@ -204,6 +207,18 @@ porto-seguro/
 ```
 
 ---
+
+## Line report (bottom-up)
+
+Operator facts first: `docs/governance/LINE_REPORT.md`.
+
+```bash
+python -m pytest tests/test_dpia_workspace.py tests/test_control_plane.py -q
+```
+
+EIPD pack: `gdpr_dpia_v1.json` · Streamlit sidebar **DPIA GDPR**.  
+Runtime DENY/STOP/approval: `src/control_plane/` (reference adapter; `/predict` is not yet on that path).  
+No AEPD / GDPR / AI Act certification is claimed.
 
 ## Quick Start
 

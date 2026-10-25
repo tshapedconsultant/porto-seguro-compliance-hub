@@ -1,9 +1,33 @@
-# Publish only README.md, EU AI Act JSON, and README screenshots to GitHub.
-# Everything else stays local.
+# Default: keep local training data/models off GitHub.
+# Allow the public hub: README, evidence packs, EIPD/control-plane source, tests.
 
 *
 
 !.gitignore
 !README.md
 !eu_ai_act_conformity_v1.json
+!gdpr_dpia_v1.json
 !porto*.png
+
+!app.py
+!pages/
+!pages/*.py
+
+!src/
+!src/governance/
+!src/governance/dpia_workspace/
+!src/governance/dpia_workspace/**
+!src/control_plane/
+!src/control_plane/**
+
+!tests/
+!tests/test_dpia_workspace.py
+!tests/test_control_plane.py
+
+!docs/
+!docs/governance/
+!docs/governance/**
+
+__pycache__/
+*.py[cod]
+*.pyc

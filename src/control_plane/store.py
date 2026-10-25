@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any
 
 from src.control_plane.default_policies import DEFAULT_POLICIES
+from src.control_plane.evaluator import validate_policy
 
 
 class ControlPlaneStore:
@@ -22,5 +23,18 @@ class ControlPlaneStore:
         return json.loads(self.policy_path.read_text(encoding="utf-8")).get("policies", [])
 
     def save_policies(self, policies: list[dict[str, Any]]) -> None:
+        for policy in policies:
+            validate_policy(policy)
         payload = json.dumps({"version": 1, "policies": policies}, indent=2, ensure_ascii=False)
         self.policy_path.write_text(payload, encoding="utf-8")
+
+    def append_executable_proposal(self, control: dict[str, Any], *, enable: bool = False) -> dict[str, Any]:
+        policy = dict(control.get("executable_policy") or {})
+        if not policy:
+            raise ValueError("control has no executable_policy")
+        policy["enabled"] = bool(enable)
+        validate_policy(policy)
+        policies = self.load_policies()
+        policies.append(policy)
+        self.save_policies(policies)
+        return policy

@@ -1,12 +1,9 @@
 """
 Versioned EU AI Act / GDPR applicability rules.
 
-Dates follow Regulation (EU) 2024/1689 as commonly applied:
-- Entry into force: 1 Aug 2024 (Art. 113)
-- Art. 5 prohibitions (selected) and AI literacy: 2 Feb 2025
-- GPAI: 2 Aug 2025
-- Most high-risk Annex III obligations: 2 Aug 2026
-Re-verify against the current EUR-Lex consolidated text before relying on a date.
+Application dates follow Art. 113 of Regulation (EU) 2024/1689 as amended in the
+EUR-Lex consolidated text dated 2026-07-27 (review of 2026-10-25). Re-verify on EUR-Lex
+before relying on a date. Annex III high-risk duties are NOT 2026-08-02.
 """
 
 from __future__ import annotations
@@ -18,15 +15,20 @@ SOURCE_VERIFIED_AT = "2026-10-25"
 AI_ACT_CELEX = "https://eur-lex.europa.eu/eli/reg/2024/1689/oj"
 
 APPLICATION_CALENDAR = {
-    "version": "2024/1689-calendar-v1",
-    "source": AI_ACT_CELEX,
-    "verified_at": SOURCE_VERIFIED_AT,
+    "version": "2024/1689-calendar-v2-art113-consolidated-2026-07-27",
+    "source": "https://eur-lex.europa.eu/eli/reg/2024/1689/2026-07-27/eng",
+    "source_oj": AI_ACT_CELEX,
+    "consolidated_text_date": "2026-07-27",
+    "encoded_at": SOURCE_VERIFIED_AT,
+    "note": "encoded_at is when this file was written, not proof the dates are correct.",
     "milestones": [
         {"id": "entry_into_force", "date": "2024-08-01", "refs": ["Art. 113"]},
-        {"id": "prohibitions_and_literacy", "date": "2025-02-02", "refs": ["Art. 5", "Art. 4", "Art. 113"]},
+        {"id": "prohibitions_and_literacy", "date": "2025-02-02", "refs": ["Art. 5 (original set)", "Art. 4", "Art. 113"]},
         {"id": "gpai", "date": "2025-08-02", "refs": ["GPAI chapter", "Art. 113"]},
-        {"id": "high_risk_annex_iii", "date": "2026-08-02", "refs": ["Annex III", "Arts 9-15", "Art. 26", "Art. 113"]},
-        {"id": "embedded_high_risk_extension", "date": "2027-08-02", "refs": ["Art. 113 transitional"]},
+        {"id": "general_application", "date": "2026-08-02", "refs": ["Art. 113 general application"]},
+        {"id": "art5_additional_prohibitions", "date": "2026-12-02", "refs": ["Art. 5 additional / Art. 113"]},
+        {"id": "high_risk_annex_iii", "date": "2027-12-02", "refs": ["Annex III duties / Art. 113 as amended"]},
+        {"id": "high_risk_annex_i", "date": "2028-08-02", "refs": ["Annex I high-risk / Art. 113"]},
     ],
 }
 
@@ -190,21 +192,36 @@ MAPPINGS = [
 
 def classify_system(answers: dict[str, Any]) -> dict[str, Any]:
     """Structured assessment — not a final legal classification."""
-    role = answers.get("role", "unknown")  # provider | deployer | other | unknown
-    annex_iii_insurance = bool(answers.get("annex_iii_insurance_scoring"))
+    role = answers.get("role", "unknown")
+    product = answers.get("insurance_product", "unknown")
+    annex_point = answers.get("annex_iii_point", "unknown")
     prohibited_flag = bool(answers.get("art5_concern"))
-    missing = [k for k in ("role", "intended_purpose", "annex_iii_insurance_scoring") if answers.get(k) in (None, "", "unknown")]
-    potential_high_risk = annex_iii_insurance
+    missing = [
+        k
+        for k in ("role", "intended_purpose", "insurance_product", "annex_iii_point", "decision_context")
+        if answers.get(k) in (None, "", "unknown")
+    ]
+    # Annex III 5(c) is life and health insurance risk assessment / pricing of natural persons — not all insurance.
+    potential_high_risk = annex_point == "5c" and product in {"life", "health"}
     return {
         "is_legal_classification": False,
         "role_declared": role,
+        "insurance_product": product,
+        "annex_iii_point": annex_point,
         "potential_high_risk": potential_high_risk,
         "potential_art5_issue": prohibited_flag,
         "potential_art50": bool(answers.get("chatbot_or_synthetic_content")),
         "outstanding_legal_questions": missing,
-        "note": "Classification is not inferred from model vendor or the mere presence of an AI component.",
+        "note": (
+            "Not inferred from model vendor. Motor claim scoring is not automatically Annex III 5(c). "
+            "A reviewer must map purpose, product, and addressees to a specific Annex III point."
+        ),
         "calendar": APPLICATION_CALENDAR,
         "as_of": date.today().isoformat(),
+        "conformity_art43": (
+            "If high-risk Annex III points 2–8 apply, Art. 43(2) points to internal control "
+            "unless other conditions require a notified body. Not every high-risk system needs third-party assessment."
+        ),
     }
 
 

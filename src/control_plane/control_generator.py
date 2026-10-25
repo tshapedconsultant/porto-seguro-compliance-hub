@@ -44,15 +44,32 @@ def propose_controls(risks: list[dict[str, Any]]) -> list[dict[str, Any]]:
         if "tool" in text or "agent" in text:
             key = "tool_allowlist"
         tmpl = LIBRARY[key]
+        cid = new_id("CTL")
+        executable = {
+            "policy_id": f"POL-GEN-{cid}",
+            "version": "1",
+            "enabled": False,
+            "priority": 80,
+            "mandatory": False,
+            "effect": tmpl["enforcement"],
+            "enforcement_point": "pre_execution",
+            "obligation_type": tmpl["obligation_type"],
+            "rationale": f"Generated from {risk.get('risk_id')} — proposal only until enabled.",
+            "conditions": {"all": [{"field": "risk_id", "op": "eq", "value": risk.get("risk_id")}]},
+            "parameters": {"max_records": 1000} if tmpl["enforcement"] == "LIMIT" else (
+                {"redact_fields": ["email", "name"]} if tmpl["enforcement"] == "REDACT" else {}
+            ),
+        }
         out.append(
             {
-                "control_id": new_id("CTL"),
+                "control_id": cid,
                 "name": tmpl["name"],
                 "description": f"Proposed from {risk.get('risk_id')}: {risk.get('threat_scenario')}",
                 "addresses_risks": [risk.get("risk_id")],
                 "obligation_type": tmpl["obligation_type"],
                 "source": tmpl["source"],
                 "enforcement_effect": tmpl["enforcement"],
+                "executable_policy": executable,
                 "status": "proposed",
                 "verification_state": "unverified",
                 "owner": "",

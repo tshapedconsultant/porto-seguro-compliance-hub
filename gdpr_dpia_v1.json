@@ -106,16 +106,16 @@
   },
   "data_subject_rights": {
     "information_art_13_14": "Model Card + this DPIA describe purpose, logic (EBM additive terms), and human review. Production privacy notice would cite this pack.",
-    "access_art_15": "Local explanation for a scored record (log-odds contributions). Production must bind explanation to a data-subject identifier — not present in the demo file.",
+    "access_art_15_1_h": "Meaningful information about the logic involved, and the significance and envisaged consequences of such processing (Art. 15(1)(h)) — native EBM log-odds contributions, not Art. 22(3).",
     "rectification_art_16": "Feature pipeline is deterministic from input row; correction is a data-quality process upstream.",
     "erasure_art_17": "Demo has no identity index. Production must support deletion of scores and training copies where legally required.",
     "objection_art_21": "Production legitimate-interest scoring must honour objection. Demo does not run a live objection channel.",
     "automated_decisions_art_22": {
-      "position": "Production must not take a solely automated decision with legal or similarly significant effects without a valid Art. 22(2) exception and safeguards (Art. 22(3)): human intervention, contest, explanation.",
+      "position": "Art. 22(3) safeguards (human intervention, express a view, contest) apply where Art. 22(2)(a) or (c) is the basis. Logic/significance of the decision is Art. 15(1)(h), not Art. 22(3).",
       "implementation_in_this_repo": [
-        "Model output is advisory (see EU AI Act Art. 14 mapping and Business Context threshold routing)",
-        "Native EBM local contributions (not a post-hoc SHAP story) support the right to obtain meaningful information about the logic involved",
-        "Human oversight routing for borderline scores"
+        "Model output is advisory (Art. 22 analogue: human review routing)",
+        "Native EBM local contributions implement Art. 15(1)(h)-style logic information",
+        "Contestability requires an operational process the demo does not run"
       ]
     }
   },
@@ -253,7 +253,7 @@
       "this_repo": "Anonymized Kaggle schema; Polars validation; train-only feature engineer fit"
     },
     {
-      "gdpr": "Art. 12–15 information and access; Art. 22(3) explanation of logic",
+      "gdpr": "Art. 15(1)(h) logic and consequences; Art. 22(3) HITL/contest (not the logic itself)",
       "eu_ai_act": "Art. 13 transparency",
       "this_repo": "Native EBM explain_local / explain_global; Model Card"
     },

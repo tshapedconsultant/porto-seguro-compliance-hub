@@ -10,6 +10,8 @@ from pathlib import Path
 import pandas as pd
 import streamlit as st
 
+from src.governance.dpia_workspace.reports import assessment_pdf_bytes
+from src.governance.dpia_workspace.store import AssessmentStore
 from utils.control_plane_notice import CONTROL_PLANE_BANNER
 
 DPIA_PATHS = (Path("gdpr_dpia_v1.json"), Path("docs/dpia_gdpr_v1.json"))
@@ -44,7 +46,7 @@ why = dpia.get("why_dpia_is_required", {})
 art22 = dpia.get("data_subject_rights", {}).get("automated_decisions_art_22", {})
 
 c1, c2, c3, c4 = st.columns(4)
-c1.metric("Disparador art. 35", "Sí (análogo)")
+c1.metric("Alcance screening", "Diseño / demo")
 c2.metric("Riesgo residual", residual.get("overall", "N/A"))
 st.caption(residual.get("residual_status", "estimated_pending_verification"))
 c3.metric("Art. 22 intervención humana", residual.get("human_intervention", "required"))
@@ -57,7 +59,7 @@ st.markdown(
 1. **Qué se trata:** puntuación de probabilidad de siniestro como apoyo a suscripción (no prima automática).
 2. **Por qué hay EIPD:** art. 35.3.a RGPD — evaluación sistemática a gran escala con efectos análogos a una decisión de seguro.
 3. **Matiz del demo:** el fichero Kaggle está anonimizado (`ps_*`). Si fuera irreversible (considerando 26), el RGPD no se aplica a esos registros; el pack existe como **control de diseño** para un responsable real.
-4. **Art. 22:** el modelo es **asesor**; hay explicación nativa EBM (log-odds) y enrutado a revisión humana.
+4. **Lógica (art. 15.1.h)** vs **salvaguardas (art. 22.3):** el EBM explica la lógica; el art. 22.3 es intervención humana, oposición e impugnación.
 5. **Descargar** el JSON: es el sistema de registro, igual que la declaración de conformidad del Reglamento de IA.
 """
 )
@@ -110,7 +112,7 @@ for key, label in principle_labels.items():
 st.header("Derechos (arts. 12–22)")
 rights = dpia.get("data_subject_rights", {})
 st.markdown(f"**Información (13–14).** {rights.get('information_art_13_14', '')}")
-st.markdown(f"**Acceso (15).** {rights.get('access_art_15', '')}")
+st.markdown(f"**Acceso / lógica (15.1.h).** {rights.get('access_art_15_1_h', rights.get('access_art_15', ''))}")
 st.markdown(f"**Decisiones automatizadas (22).** {art22.get('position', '')}")
 st.markdown("**Salvaguardas en este repositorio:**")
 for item in art22.get("implementation_in_this_repo", []):
@@ -150,7 +152,26 @@ if cross:
     st.table(pd.DataFrame(cross))
 
 st.page_link("pages/06_EU_AI_Act.py", label="Abrir mapeo artículo a artículo del Reglamento de IA")
-st.page_link("pages/03_Explainability.py", label="Abrir explicabilidad nativa (art. 22 / art. 13 IA)")
+st.page_link("pages/03_Explainability.py", label="Abrir explicabilidad nativa (art. 15.1.h / art. 13 IA)")
+
+st.header("Expediente dinámico")
+st.caption("AssessmentStore (no es el pack estático). Un cambio material invalida una aprobación interna.")
+dyn = AssessmentStore().ensure_demo()
+st.write(
+    {
+        "id": dyn.assessment_id,
+        "decision_state": dyn.decision_state,
+        "screening_outcome": dyn.screening.get("outcome"),
+        "screening_scope": dyn.screening.get("scope"),
+        "risks": len(dyn.risks),
+    }
+)
+st.download_button(
+    label="Descargar PDF del expediente dinámico",
+    data=assessment_pdf_bytes(dyn),
+    file_name=f"{dyn.assessment_id}.pdf",
+    mime="application/pdf",
+)
 
 st.markdown("---")
 st.subheader("Pack de evidencia")

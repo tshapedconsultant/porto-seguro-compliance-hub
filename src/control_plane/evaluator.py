@@ -90,16 +90,24 @@ def evaluate_policies(
         if mandatory_block:
             winner = sorted(mandatory_block, key=lambda p: PRECEDENCE.index(p["effect"]))[0]
         else:
-            winner = (
-                sorted(matched, key=lambda p: PRECEDENCE.index(p.get("effect", "ALLOW")))[0]
-                if matched
-                else {
-                    "policy_id": "default-allow",
+            if matched:
+                winner = sorted(matched, key=lambda p: PRECEDENCE.index(p.get("effect", "ALLOW")))[0]
+            else:
+                sensitive = (
+                    context.get("action") in {"export_external", "delete", "shell", "write"}
+                    or context.get("legal_effect_decision")
+                    or context.get("identifiable_personal_data")
+                    or context.get("art5_concern")
+                )
+                winner = {
+                    "policy_id": "default-deny-sensitive" if sensitive else "default-allow",
                     "version": "0",
-                    "effect": "ALLOW",
-                    "mandatory": False,
+                    "effect": "DENY" if sensitive else "ALLOW",
+                    "mandatory": bool(sensitive),
+                    "rationale": "Fail-closed: sensitive action with no matching policy"
+                    if sensitive
+                    else "No matching policy",
                 }
-            )
 
         return {
             "effect": winner.get("effect", "ALLOW"),

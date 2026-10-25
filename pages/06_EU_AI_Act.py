@@ -25,7 +25,9 @@ _cls = classify_system(
     {
         "role": "unknown",
         "intended_purpose": "claim probability decision support",
-        "annex_iii_insurance_scoring": True,
+        "insurance_product": "motor",
+        "annex_iii_point": "unknown",
+        "decision_context": "advisory underwriting analogue on anonymised Kaggle rows",
     }
 )
 st.caption(

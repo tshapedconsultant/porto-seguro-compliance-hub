@@ -16,16 +16,31 @@
 !pages/
 !pages/*.py
 
+!requirements.txt
+!requirements_streamlit.txt
+!run_training.py
+!run_training_full.py
+!run_production_monitor.py
+!.github/
+!.github/workflows/
+!.github/workflows/ci.yml
+
 !src/
 !src/governance/
+!src/governance/*.py
 !src/governance/dpia_workspace/
 !src/governance/dpia_workspace/**
 !src/control_plane/
 !src/control_plane/**
+!src/models/
+!src/models/*.py
+!src/monitoring/
+!src/monitoring/*.py
+!src/data_processing/
+!src/data_processing/*.py
 
 !tests/
-!tests/test_dpia_workspace.py
-!tests/test_control_plane.py
+!tests/*.py
 
 !docs/
 !docs/governance/

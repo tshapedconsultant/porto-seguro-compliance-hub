@@ -70,11 +70,16 @@ class ReferenceRuntime:
         context: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         ctx = dict(context or {})
-        ctx.setdefault("action", action)
+        ctx.pop("tool_allowed", None)
+        ctx["action"] = action
         ctx["stop_requested"] = self.stop_requested or self.circuit_open
+        if ctx.get("tool") is None and action in self.tool_allowlist:
+            ctx["tool"] = action
         tool = ctx.get("tool")
         if tool is not None:
             ctx["tool_allowed"] = tool in self.tool_allowlist
+        elif action in {"export_external", "delete", "shell", "write"}:
+            ctx["tool_allowed"] = False
 
         decision = evaluate_policies(ctx, self.policies)
         event = {
@@ -98,8 +103,16 @@ class ReferenceRuntime:
             self.audit.append({**event, "action_taken": "blocked_before_execution"})
             raise RuntimeBlocked(decision)
         if effect == "QUARANTINE":
-            self.audit.append({**event, "action_taken": "quarantined_before_execution"})
+            self.audit.append(
+                {
+                    **event,
+                    "action_taken": "quarantined_before_execution",
+                    "resource_quarantined": ctx.get("execution_id") or action,
+                }
+            )
             raise RuntimeBlocked(decision)
+        if effect == "ALERT":
+            self.audit.append({**event, "action_taken": "alert_recorded", "notification": "audit_only"})
         if effect == "REQUIRE_HUMAN_APPROVAL":
             ok = self.approvals.is_approved(
                 ctx.get("approval_ticket_id"),
@@ -171,10 +184,17 @@ _default_runtime: ReferenceRuntime | None = None
 
 
 def get_runtime() -> ReferenceRuntime:
-    """Per-process singleton. Not shared across workers or replicas."""
+    """Per-process singleton. Loads ControlPlaneStore policies when present."""
     global _default_runtime
     if _default_runtime is None:
-        _default_runtime = ReferenceRuntime()
+        from src.control_plane.store import ControlPlaneStore
+
+        store = ControlPlaneStore()
+        try:
+            policies = store.load_policies()
+        except Exception:
+            policies = None
+        _default_runtime = ReferenceRuntime(policies=policies or None)
     return _default_runtime
 
 

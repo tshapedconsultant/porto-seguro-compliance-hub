@@ -294,3 +294,65 @@ def test_audit_chain_detects_tamper(tmp_path):
     ok2, reason = log2.verify_chain()
     assert ok2 is False
     assert "chain_break" in reason
+
+
+def test_action_field_cannot_spoof_export(tmp_path):
+    called = {"n": 0}
+
+    def send_data(ctx):
+        called["n"] += 1
+        return "sent"
+
+    rt = _rt(tmp_path)
+    with pytest.raises(RuntimeBlocked):
+        rt.execute_guarded(
+            "export_external",
+            send_data,
+            {"action": "predict", "identifiable_personal_data": True},
+        )
+    assert called["n"] == 0
+
+
+def test_sensitive_unmatched_defaults_to_deny(tmp_path):
+    rt = _rt(tmp_path)
+    with pytest.raises(RuntimeBlocked) as exc:
+        rt.execute_guarded("delete", lambda: 1, {})
+    assert exc.value.decision["effect"] == "DENY"
+
+
+def test_calendar_annex_iii_not_2026_08_02():
+    from src.control_plane.regulatory_library import APPLICATION_CALENDAR
+
+    by_id = {m["id"]: m["date"] for m in APPLICATION_CALENDAR["milestones"]}
+    assert by_id["high_risk_annex_iii"] == "2027-12-02"
+    assert by_id["general_application"] == "2026-08-02"
+    assert by_id["high_risk_annex_i"] == "2028-08-02"
+
+
+def test_motor_not_automatically_high_risk():
+    from src.control_plane.regulatory_library import classify_system
+
+    result = classify_system(
+        {
+            "role": "deployer",
+            "intended_purpose": "motor claims",
+            "insurance_product": "motor",
+            "annex_iii_point": "unknown",
+        }
+    )
+    assert result["potential_high_risk"] is False
+    assert result["is_legal_classification"] is False
+
+
+def test_generated_policy_can_be_validated_and_stored(tmp_path):
+    from src.control_plane.control_generator import propose_controls
+    from src.control_plane.evaluator import validate_policy
+    from src.control_plane.store import ControlPlaneStore
+
+    controls = propose_controls([{"risk_id": "RSK-9", "threat_scenario": "agent tool abuse"}])
+    policy = controls[0]["executable_policy"]
+    validate_policy(policy)
+    store = ControlPlaneStore(tmp_path)
+    stored = store.append_executable_proposal(controls[0], enable=True)
+    loaded = store.load_policies()
+    assert stored["policy_id"] in {p["policy_id"] for p in loaded}

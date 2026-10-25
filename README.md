@@ -213,8 +213,12 @@ porto-seguro/
 Operator facts first: `docs/governance/LINE_REPORT.md`.
 
 ```bash
-python -m pytest tests/test_dpia_workspace.py tests/test_control_plane.py -q
+pip install -r requirements_streamlit.txt
+python -m pytest tests/test_dpia_workspace.py tests/test_control_plane.py tests/test_import_surface.py -q
+streamlit run app.py
 ```
+
+A clean clone starts the Model Card, DPIA and EU AI Act pages without `train.csv` or `.pkl` artifacts (those remain gitignored). Full training still needs the Kaggle file locally. `/predict` is wrapped by `execute_guarded` **in-process only**.
 
 EIPD pack: `gdpr_dpia_v1.json` · Streamlit sidebar **DPIA GDPR**.  
 Runtime DENY/STOP/LIMIT/REDACT/approval: `src/control_plane/` wraps `POST /predict` **in this process** (in-memory singleton; not multi-worker).  

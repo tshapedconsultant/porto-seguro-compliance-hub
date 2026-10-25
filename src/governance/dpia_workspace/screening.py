@@ -88,16 +88,41 @@ def screen_necessity(
     missing_evidence: list[str] = []
     uncertainty: list[str] = []
 
+    invalid: list[str] = []
     for q in SCREENING_QUESTIONS:
         val = answers.get(q["id"])
         if val is None:
             missing_evidence.append(q["id"])
             uncertainty.append(f"Unanswered: {q['id']}")
             continue
+        if val is not True and val is not False:
+            invalid.append(q["id"])
+            uncertainty.append(f"Invalid non-boolean answer for {q['id']}")
+            continue
         if val is True:
             (strong if q["weight"] == "strong" else indicators).append(q["id"])
 
-    if processing.get("uses_identifiable_personal_data") is False:
+    if invalid:
+        return {
+            "outcome": "further_assessment_required",
+            "reasoning": "Screening answers must be true, false, or omitted — not strings.",
+            "strong_indicators": [],
+            "other_indicators": [],
+            "missing_evidence": missing_evidence,
+            "uncertainty": uncertainty,
+            "invalid_answers": invalid,
+            "is_legal_determination": False,
+            "voluntary_eipa_allowed": True,
+            "author": author,
+            "recorded_at": utc_now(),
+            "answers": answers,
+            "scope": "invalid_input",
+        }
+
+    data_status = processing.get("data_status") or (
+        "identifiable" if processing.get("uses_identifiable_personal_data") else "none_demo"
+    )
+    if data_status in {"anonymised_claimed", "none_demo"}:
         uncertainty.append(
             "Controller asserts demo/anonymised data (Recital 26). If anonymisation is not irreversible, Art. 35 analysis still applies."
         )
@@ -125,9 +150,20 @@ def screen_necessity(
             "This is not a finding that an EIPD is legally unnecessary."
         )
 
-    refs = sorted({q["gdpr"] for q in SCREENING_QUESTIONS if answers.get(q["id"])})
+    scope = "gdpr_personal_data" if data_status == "identifiable" else "voluntary_design_assessment"
+    if scope == "voluntary_design_assessment" and outcome == "full_eipa_appears_necessary":
+        outcome = "voluntary_design_eipa_recommended"
+        reasoning = (
+            "High-risk indicators would support an Art. 35 EIPD IF identifiable personal data "
+            "were processed. This record claims demo/anonymised data; this is not a finding "
+            "that GDPR Art. 35 legally applies to that file."
+        )
+
+    refs = sorted({q["gdpr"] for q in SCREENING_QUESTIONS if answers.get(q["id"]) is True})
     return {
         "outcome": outcome,
+        "scope": scope,
+        "data_status": data_status,
         "reasoning": reasoning,
         "strong_indicators": strong,
         "other_indicators": indicators,

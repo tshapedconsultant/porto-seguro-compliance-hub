@@ -31,8 +31,9 @@ def test_screening_all_unanswered():
 def test_screening_strong_indicator():
     answers = {q["id"]: False for q in SCREENING_QUESTIONS}
     answers["q_automated_legal"] = True
-    result = screen_necessity(answers)
+    result = screen_necessity(answers, {"data_status": "identifiable", "uses_identifiable_personal_data": True})
     assert result["outcome"] == "full_eipa_appears_necessary"
+    assert result["scope"] == "gdpr_personal_data"
     assert "q_automated_legal" in result["strong_indicators"]
 
 
@@ -108,6 +109,9 @@ def test_residual_changes_only_with_verified_linked_control():
             "addresses_risks": [risk["risk_id"]],
             "status": "verified_in_target",
             "verification_state": "verified",
+            "reduction_justification": "Target A/B showed lower residual error on this threat",
+            "affects_dimension": "both",
+            "reduction_magnitude": 1,
         }
     ]
     out = reassess_residual(risk, controls)
@@ -146,7 +150,8 @@ def test_art36_flag_not_auto_submit():
     risk = score_risk(likelihood=5, severity=5, threat="t", harm="h", family="rights_and_freedoms")
     reassess_residual(risk, [])
     flag = art36_needed([risk])
-    assert flag["may_require_prior_consultation"] is True
+    assert flag["legal_review_required"] is True
+    assert flag["may_require_prior_consultation"] is False
     assert flag["auto_submit"] is False
 
 
@@ -168,3 +173,49 @@ def test_proportionality_blocks_personal_data_without_basis():
     processing["purposes"] = ["underwriting"]
     result = assess_proportionality(processing)
     assert result["blocking_lawfulness_or_necessity"] is True
+
+
+def test_incomplete_cannot_be_approved(tmp_path):
+    from src.governance.dpia_workspace.store import AssessmentStore
+
+    store = AssessmentStore(tmp_path)
+    item = store.create("thin")
+    store.add_review(
+        item,
+        role="decision_maker",
+        actor="controller",
+        decision="approved_internally",
+        rationale="too soon",
+    )
+    loaded = store.get(item.assessment_id)
+    assert loaded.decision_state != "approved_internally"
+
+
+def test_path_traversal_rejected(tmp_path):
+    from src.governance.dpia_workspace.store import AssessmentStore
+
+    store = AssessmentStore(tmp_path)
+    with pytest.raises(ValueError):
+        store.get("../secret")
+
+
+def test_invalid_screening_string():
+    result = screen_necessity({"q_profiling": "no"})
+    assert result["outcome"] == "further_assessment_required"
+    assert "invalid_answers" in result
+
+
+def test_tested_control_does_not_cut_residual():
+    risk = score_risk(likelihood=4, severity=4, threat="t", harm="h")
+    inherent = risk["inherent_score"]
+    out = reassess_residual(
+        risk,
+        [
+            {
+                "addresses_risks": [risk["risk_id"]],
+                "status": "tested",
+                "verification_state": "tested",
+            }
+        ],
+    )
+    assert out["residual_score"] == inherent

@@ -26,6 +26,8 @@ OPS = {
     "exists": lambda a, b: bool(a) if b else a is not None,
 }
 
+ALLOWED_EFFECTS = set(PRECEDENCE)
+
 
 def _match_clause(context: dict[str, Any], clause: dict[str, Any]) -> bool:
     field = clause.get("field")
@@ -36,12 +38,31 @@ def _match_clause(context: dict[str, Any], clause: dict[str, Any]) -> bool:
 
 
 def _match_policy(context: dict[str, Any], policy: dict[str, Any]) -> bool:
+    """all AND any: every all-clause must hold; if any exists, at least one any-clause must hold."""
     cond = policy.get("conditions") or {}
-    if "all" in cond:
-        return all(_match_clause(context, c) for c in cond["all"])
-    if "any" in cond:
-        return any(_match_clause(context, c) for c in cond["any"])
-    return True
+    has_all = "all" in cond
+    has_any = "any" in cond
+    if not has_all and not has_any:
+        return True
+    ok_all = all(_match_clause(context, c) for c in cond.get("all") or []) if has_all else True
+    ok_any = any(_match_clause(context, c) for c in cond.get("any") or []) if has_any else True
+    return ok_all and ok_any
+
+
+def validate_policy(policy: dict[str, Any]) -> None:
+    effect = policy.get("effect")
+    if effect not in ALLOWED_EFFECTS:
+        raise ValueError(f"Invalid effect: {effect}")
+    cond = policy.get("conditions") or {}
+    for group in ("all", "any"):
+        for clause in cond.get(group) or []:
+            op = clause.get("op", "eq")
+            if op not in OPS:
+                raise ValueError(f"Unknown operator: {op}")
+    if effect == "REDACT" and not (policy.get("parameters") or {}).get("redact_fields"):
+        raise ValueError("REDACT policies must set parameters.redact_fields")
+    if effect == "LIMIT" and "max_records" not in (policy.get("parameters") or {}):
+        raise ValueError("LIMIT policies must set parameters.max_records")
 
 
 def evaluate_policies(
@@ -52,6 +73,9 @@ def evaluate_policies(
 ) -> dict[str, Any]:
     """Deterministic evaluation. Mandatory DENY/STOP cannot be overridden by ALLOW."""
     try:
+        for policy in policies:
+            if policy.get("enabled", True):
+                validate_policy(policy)
         enabled = [p for p in policies if p.get("enabled", True)]
         enabled.sort(key=lambda p: int(p.get("priority", 100)))
         matched: list[dict[str, Any]] = []
@@ -66,12 +90,16 @@ def evaluate_policies(
         if mandatory_block:
             winner = sorted(mandatory_block, key=lambda p: PRECEDENCE.index(p["effect"]))[0]
         else:
-            winner = sorted(matched, key=lambda p: PRECEDENCE.index(p.get("effect", "ALLOW")))[0] if matched else {
-                "policy_id": "default-allow",
-                "version": "0",
-                "effect": "ALLOW",
-                "mandatory": False,
-            }
+            winner = (
+                sorted(matched, key=lambda p: PRECEDENCE.index(p.get("effect", "ALLOW")))[0]
+                if matched
+                else {
+                    "policy_id": "default-allow",
+                    "version": "0",
+                    "effect": "ALLOW",
+                    "mandatory": False,
+                }
+            )
 
         return {
             "effect": winner.get("effect", "ALLOW"),
@@ -94,7 +122,7 @@ def evaluate_policies(
                 "policy_version": "0",
                 "mandatory": True,
                 "matched_policy_ids": [],
-                "explanation": f"Policy evaluation failed closed: {exc}",
+                "explanation": f"Policy evaluation failed closed: {type(exc).__name__}",
                 "parameters": {},
                 "enforcement_point": "pre_execution",
                 "obligation_type": "security_restriction",

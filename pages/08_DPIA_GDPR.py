@@ -10,6 +10,8 @@ from pathlib import Path
 import pandas as pd
 import streamlit as st
 
+from utils.control_plane_notice import CONTROL_PLANE_BANNER
+
 DPIA_PATHS = (Path("gdpr_dpia_v1.json"), Path("docs/dpia_gdpr_v1.json"))
 
 
@@ -24,6 +26,7 @@ dpia, dpia_path = _load_dpia()
 
 st.title("EIPD / DPIA — RGPD art. 35")
 st.caption("Evaluación de impacto relativa a la protección de datos · laboratorio de innovación AEPD")
+st.warning(CONTROL_PLANE_BANNER)
 
 st.warning(
     dpia.get("disclaimer", {}).get(
@@ -43,6 +46,7 @@ art22 = dpia.get("data_subject_rights", {}).get("automated_decisions_art_22", {}
 c1, c2, c3, c4 = st.columns(4)
 c1.metric("Disparador art. 35", "Sí (análogo)")
 c2.metric("Riesgo residual", residual.get("overall", "N/A"))
+st.caption(residual.get("residual_status", "estimated_pending_verification"))
 c3.metric("Art. 22 intervención humana", residual.get("human_intervention", "required"))
 c4.metric("Notificación AEPD", "No (demo)")
 

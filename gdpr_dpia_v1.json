@@ -134,6 +134,7 @@
       "residual_likelihood": 2,
       "residual_severity": 3,
       "residual_score": 6,
+      "residual_status": "estimated_pending_verification",
       "status": "accepted_with_monitoring"
     },
     {
@@ -151,6 +152,7 @@
       "residual_likelihood": 2,
       "residual_severity": 3,
       "residual_score": 6,
+      "residual_status": "estimated_pending_verification",
       "status": "accepted_with_monitoring"
     },
     {
@@ -168,6 +170,7 @@
       "residual_likelihood": 1,
       "residual_severity": 4,
       "residual_score": 4,
+      "residual_status": "estimated_pending_verification",
       "status": "accepted_in_demo"
     },
     {
@@ -185,6 +188,7 @@
       "residual_likelihood": 2,
       "residual_severity": 3,
       "residual_score": 6,
+      "residual_status": "estimated_pending_verification",
       "status": "accepted_with_human_review"
     },
     {
@@ -201,12 +205,14 @@
       "residual_likelihood": 1,
       "residual_severity": 3,
       "residual_score": 3,
+      "residual_status": "estimated_pending_verification",
       "status": "accepted"
     }
   ],
   "residual_risk_summary": {
     "overall": "medium",
-    "scale_note": "Scores are likelihood × severity (1–5). Residual scores 3–6 after controls.",
+    "residual_status": "estimated_pending_verification",
+    "scale_note": "Scores are Porto Seguro likelihood × severity (1–5), NOT an AEPD official scale. Residual figures in this static pack are estimates pending linked controls with verification_state tested|verified. The runtime engine will not lower residual without that evidence.",
     "article_36": "Prior consultation with the AEPD is not triggered by this demonstration. A live controller would reassess residual high risk after mitigations before any Art. 36 filing.",
     "human_intervention": "required"
   },

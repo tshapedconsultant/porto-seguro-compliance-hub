@@ -36,7 +36,10 @@ from utils.data_loaders import (
 
 
 
+from utils.control_plane_notice import CONTROL_PLANE_BANNER
+
 st.header("🇪🇺 Regulatory Compliance & EU AI Act Hub")
+st.warning(CONTROL_PLANE_BANNER)
 
 st.info(
 

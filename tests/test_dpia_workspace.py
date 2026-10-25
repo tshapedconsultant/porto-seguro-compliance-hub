@@ -134,6 +134,14 @@ def test_pdf_magic():
     assert pdf.startswith(b"%PDF")
 
 
+def test_pdf_truncates_before_escape():
+    from src.governance.dpia_workspace.reports import render_text_pdf
+
+    pdf = render_text_pdf("t", ["(" * 200])
+    assert pdf.startswith(b"%PDF")
+    assert b"endobj" in pdf
+
+
 def test_art36_flag_not_auto_submit():
     risk = score_risk(likelihood=5, severity=5, threat="t", harm="h", family="rights_and_freedoms")
     reassess_residual(risk, [])

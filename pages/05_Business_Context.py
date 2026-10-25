@@ -167,8 +167,9 @@ st.markdown(
     **Risks if misused:**
     - ❌ Using raw probabilities as discount factors in premium pricing.
     - ❌ Auto-declining policies on raw score without human review.
-    - ❌ Treating Recall {recall:.1%} as "captures {recall:.1%} of all claims" - it captures
-      that fraction *within the model's alert volume*, not in the full portfolio.
+    - ❌ Using Precision {precision:.1%} as if it were the share of all claims captured.
+      **Recall** is TP/(TP+FN): the share of *all real claims in the test set* the model
+      captures. **Precision** is TP/(TP+FP): the share of alerts that are real claims.
     """
 )
 
@@ -216,11 +217,12 @@ else:
         str(predictions_path), mtime
     )
 
+    slider_max = max(0.50, float(min(max(threshold, 0.01), 0.99)))
     selected_threshold = st.slider(
         "Decision threshold",
         min_value=0.01,
-        max_value=0.50,
-        value=float(threshold),
+        max_value=float(slider_max),
+        value=float(min(max(threshold, 0.01), slider_max)),
         step=0.005,
         format="%.3f",
         help="Move to see how the threshold affects metrics and policy volume.",

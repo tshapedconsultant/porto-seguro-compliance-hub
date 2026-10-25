@@ -293,4 +293,8 @@ fig_comparison = px.bar(
 )
 
 st.plotly_chart(fig_comparison, use_container_width=True)
+st.caption(
+    "0.648 is an approximate public-leaderboard order of magnitude for this Kaggle "
+    "competition (not reproduced in this repo; not a verified benchmark run)."
+)
 

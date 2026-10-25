@@ -7,12 +7,43 @@ from __future__ import annotations
 
 import streamlit as st
 
+from src.control_plane.regulatory_library import applicable_mappings, classify_system
+from utils.control_plane_notice import CONTROL_PLANE_BANNER
+
 st.title("⚖️ EU AI Act - Article-by-Article Mapping")
+st.warning(CONTROL_PLANE_BANNER)
 st.markdown(
-    "Insurance risk models qualify as **high-risk AI systems** under EU AI "
-    "Act Annex III. This page maps every regulatory obligation to a concrete "
-    "implementation in the pipeline."
+    "This scoring demo **may** fall under high-risk duties **if** it is used for "
+    "insurance risk assessment and pricing in life and health insurance within "
+    "Annex III, **and** the operator's role (provider vs deployer) is established. "
+    "Classification is **conditional** — not inferred from the EBM library or model name. "
+    "Conformity assessment (Art. 43) is **not** automatically a third-party notified-body "
+    "process for every Annex III system; it depends on the applicable path. "
+    "Source of truth for dates and actors: `src/control_plane/regulatory_library.py`."
 )
+_cls = classify_system(
+    {
+        "role": "unknown",
+        "intended_purpose": "claim probability decision support",
+        "annex_iii_insurance_scoring": True,
+    }
+)
+st.caption(
+    f"Screening (not a legal classification): potential_high_risk={_cls['potential_high_risk']} "
+    f"· is_legal_classification={_cls['is_legal_classification']} · role={_cls['role_declared']}"
+)
+with st.expander("Regulatory library (conditional applicability)", expanded=False):
+    rows = [
+        {
+            "id": m["id"],
+            "article": m["article"],
+            "actor": m["actor"],
+            "computed": m["computed_applicability"],
+        }
+        for m in applicable_mappings(_cls)
+    ]
+    st.dataframe(rows, hide_index=True, use_container_width=True)
+
 st.markdown("---")
 
 # --- Article mapping table ---
@@ -68,9 +99,10 @@ st.header("Conformity assessment (Art. 43)")
 
 st.warning(
     "This dashboard demonstrates **technical readiness** for EU AI Act conformity. "
-    "Production deployment under high-risk AI categorization requires formal "
-    "third-party conformity assessment per Article 43 - not in scope of this "
-    "case study."
+    "A production high-risk classification, if confirmed, triggers the applicable "
+    "conformity path under Article 43 — which is **not always** a third-party "
+    "assessment by an accredited body. This dashboard shows technical evidence, "
+    "not a completed conformity procedure."
 )
 
 # --- Solvency II crosswalk ---

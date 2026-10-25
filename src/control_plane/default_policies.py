@@ -111,6 +111,20 @@ DEFAULT_POLICIES = [
         "parameters": {},
         "test_scenarios": ["export_external with personal data"],
     },
+    {
+        "policy_id": "POL-REDACT-OUTPUT",
+        "version": "1",
+        "enabled": True,
+        "priority": 35,
+        "mandatory": False,
+        "effect": "REDACT",
+        "enforcement_point": "output_validation",
+        "obligation_type": "internal_rule",
+        "rationale": "Redact named output fields when requested. Empty redact_fields is invalid.",
+        "conditions": {"all": [{"field": "redact_output", "op": "eq", "value": True}]},
+        "parameters": {"redact_fields": ["email", "name", "client_ip"]},
+        "test_scenarios": ["redact_output true"],
+    },
 ]
 
 

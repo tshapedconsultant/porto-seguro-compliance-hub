@@ -15,10 +15,10 @@ Hechos en disco, no intenciones.
 | Motor EIPD | `src/governance/dpia_workspace/` | Código presente |
 | Motor de políticas | `src/control_plane/` | Código presente |
 | Página Streamlit pack | `pages/08_DPIA_GDPR.py` | Pack JSON + descarga |
-| API predicción | `api_server.py` `/predict` | Rate limit + SHA-256; **aún no** llama a `execute_guarded` |
-| Tests de borde | `tests/test_dpia_workspace.py`, `tests/test_control_plane.py` | A ejecutar en esta máquina |
-| Persistencia EIPD | `docs/governance/assessments/*.json` | Local JSON, no multi-tenant |
-| Auditoría control plane | `docs/governance/control_plane_audit.jsonl` | Append-only; hash ≠ inmutabilidad criptográfica |
+| API predicción | `api_server.py` `/predict` y `/batch_predict` | Pasan por `execute_guarded` **en este proceso** |
+| Tests de borde | `tests/test_dpia_workspace.py`, `tests/test_control_plane.py` | LIMIT real, REDACT, binding, cadena de auditoría |
+| Persistencia EIPD | `docs/governance/assessments/*.json` | Local; **no** se publica en GitHub |
+| Auditoría control plane | JSONL con hash encadenado | No es WORM; el fichero se puede reescribir |
 
 Comando de verificación de línea:
 
@@ -37,7 +37,7 @@ python -m pytest tests/test_dpia_workspace.py tests/test_control_plane.py -q
 5. Ticket de aprobación: sin `approve` la acción no corre; con revisor vacío, error.  
 6. Stop: `request_stop` → `RuntimeStopped` en la siguiente acción que pase por el adaptador.
 
-Lo que la línea **no** puede afirmar: que el tráfico live de `/predict` esté bajo el mismo DENY hasta que ese endpoint llame al runtime.
+Lo que la línea **no** puede afirmar: que stop/aprobaciones se repliquen entre workers; el runtime es un singleton **por proceso**. `/predict` sí llama a `execute_guarded` en este proceso.
 
 ---
 

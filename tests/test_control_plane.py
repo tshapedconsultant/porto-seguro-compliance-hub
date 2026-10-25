@@ -45,10 +45,23 @@ def test_stop_switch(tmp_path):
 
 
 def test_limit_caps_records(tmp_path):
+    seen = {}
+
+    def fn(ctx):
+        seen["n"] = len(ctx["records"])
+        return ctx["records"]
+
     rt = _rt(tmp_path)
-    out = rt.execute_guarded("batch", lambda: "ok", {"record_count": 5000})
-    assert out["context"]["record_count"] == 1000
+    records = [{"id": i} for i in range(5000)]
+    out = rt.execute_guarded(
+        "batch",
+        fn,
+        {"record_count": 5000, "records": records, "tool": "predict_ebm"},
+    )
     assert out["decision"]["effect"] == "LIMIT"
+    assert seen["n"] == 1000
+    assert len(out["result"]) == 1000
+    assert out["context"]["records_truncated"] is True
 
 
 def test_budget_deny(tmp_path):
@@ -63,12 +76,19 @@ def test_approval_gate(tmp_path):
     with pytest.raises(RuntimeBlocked):
         rt.execute_guarded("score", lambda: 1, {"legal_effect_decision": True})
 
-    ticket = rt.approvals.request(action="score", requester="u", reason="underwriting analogue")
+    payload = {"case": "underwriting"}
+    ticket = rt.approvals.request(
+        action="score", requester="u", reason="underwriting analogue", payload=payload
+    )
     rt.approvals.decide(ticket["ticket_id"], reviewer="reviewer", approve=True, rationale="hitl")
     out = rt.execute_guarded(
         "score",
         lambda: 1,
-        {"legal_effect_decision": True, "approval_ticket_id": ticket["ticket_id"]},
+        {
+            "legal_effect_decision": True,
+            "approval_ticket_id": ticket["ticket_id"],
+            "approval_payload": payload,
+        },
     )
     assert out["status"] == "ok"
 
@@ -161,6 +181,9 @@ def test_circuit_breaker(tmp_path):
             rt.execute_guarded("predict", boom, {})
     with pytest.raises(RuntimeStopped):
         rt.execute_guarded("predict", lambda: 1, {})
+    rt.reset_circuit("andre", "lab recovery")
+    out = rt.execute_guarded("predict_ebm", lambda: 1, {"tool": "predict_ebm", "record_count": 1})
+    assert out["status"] == "ok"
 
 
 def test_control_proposals_are_unverified():
@@ -199,3 +222,75 @@ def test_art5_screening_deny(tmp_path):
     with pytest.raises(RuntimeBlocked) as exc:
         rt.execute_guarded("run", lambda: 1, {"art5_concern": True})
     assert exc.value.decision["policy_id"] == "POL-ART5-SCREEN"
+
+
+def test_ticket_wrong_action_is_confused_deputy(tmp_path):
+    rt = _rt(tmp_path)
+    ticket = rt.approvals.request(action="score", requester="u", reason="x", payload={"a": 1})
+    rt.approvals.decide(ticket["ticket_id"], reviewer="r", approve=True, rationale="ok")
+    with pytest.raises(RuntimeBlocked):
+        rt.execute_guarded(
+            "export_external",
+            lambda: 1,
+            {
+                "legal_effect_decision": True,
+                "approval_ticket_id": ticket["ticket_id"],
+                "approval_payload": {"a": 1},
+            },
+        )
+
+
+def test_all_and_any_both_required():
+    policies = [
+        {
+            "policy_id": "mix",
+            "version": "1",
+            "enabled": True,
+            "priority": 1,
+            "mandatory": True,
+            "effect": "DENY",
+            "conditions": {
+                "all": [{"field": "flag", "op": "eq", "value": True}],
+                "any": [
+                    {"field": "tool", "op": "eq", "value": "shell"},
+                    {"field": "tool", "op": "eq", "value": "curl"},
+                ],
+            },
+        }
+    ]
+    assert evaluate_policies({"flag": True, "tool": "predict_ebm"}, policies)["effect"] == "ALLOW"
+    assert evaluate_policies({"flag": True, "tool": "shell"}, policies)["effect"] == "DENY"
+
+
+def test_redact_removes_fields(tmp_path):
+    rt = _rt(tmp_path)
+    out = rt.execute_guarded(
+        "predict_ebm",
+        lambda: {"email": "a@b.c", "score": 0.1, "name": "Ada"},
+        {"tool": "predict_ebm", "record_count": 1, "redact_output": True},
+    )
+    assert out["result"]["email"] == "[REDACTED]"
+    assert out["result"]["name"] == "[REDACTED]"
+    assert out["result"]["score"] == 0.1
+    assert "email" in out["context"]["redacted_fields"]
+
+
+def test_redact_without_fields_denies():
+    from src.control_plane.redaction import apply_redaction
+
+    with pytest.raises(ValueError):
+        apply_redaction({"email": "x"}, [])
+
+
+def test_audit_chain_detects_tamper(tmp_path):
+    log = AuditLog(tmp_path / "a.jsonl")
+    log.append({"decision": "ALLOW"})
+    log.append({"decision": "DENY"})
+    ok, _ = log.verify_chain()
+    assert ok is True
+    lines = (tmp_path / "a.jsonl").read_text(encoding="utf-8").splitlines()
+    (tmp_path / "a.jsonl").write_text(lines[0] + "\n" + lines[0] + "\n", encoding="utf-8")
+    log2 = AuditLog(tmp_path / "a.jsonl")
+    ok2, reason = log2.verify_chain()
+    assert ok2 is False
+    assert "chain_break" in reason

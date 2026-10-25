@@ -217,8 +217,8 @@ python -m pytest tests/test_dpia_workspace.py tests/test_control_plane.py -q
 ```
 
 EIPD pack: `gdpr_dpia_v1.json` · Streamlit sidebar **DPIA GDPR**.  
-Runtime DENY/STOP/approval: `src/control_plane/` (reference adapter; `/predict` is not yet on that path).  
-No AEPD / GDPR / AI Act certification is claimed.
+Runtime DENY/STOP/LIMIT/REDACT/approval: `src/control_plane/` wraps `POST /predict` **in this process** (in-memory singleton; not multi-worker).  
+Static EIPD residual scores are **estimated pending verification**. No AEPD / GDPR / AI Act certification is claimed.
 
 ## Quick Start
 

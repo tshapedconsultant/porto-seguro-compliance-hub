@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import inspect
 from typing import Any, Callable
 
 from src.control_plane.approvals import ApprovalStore
 from src.control_plane.audit import AuditLog
 from src.control_plane.default_policies import DEFAULT_POLICIES, TOOL_ALLOWLIST
 from src.control_plane.evaluator import evaluate_policies
+from src.control_plane.redaction import apply_redaction
 
 
 class RuntimeBlocked(Exception):
@@ -21,7 +23,10 @@ class RuntimeStopped(RuntimeBlocked):
 class ReferenceRuntime:
     """
     Level 3 only for actions that go through execute_guarded.
-    Does not claim protection of traffic that never hits this adapter.
+
+    SINGLE PROCESS: stop_requested, circuit_open, consecutive_failures and
+    ApprovalStore are in-memory. Streamlit/FastAPI workers do not share this
+    state. Production must externalize stop, circuit, approvals, and audit.
     """
 
     def __init__(
@@ -46,10 +51,22 @@ class ReferenceRuntime:
         self.stop_requested = False
         self.audit.append({"rule_triggered": "stop_cleared", "decision": "ALLOW", "actor": actor})
 
+    def reset_circuit(self, actor: str, reason: str) -> None:
+        self.circuit_open = False
+        self.consecutive_failures = 0
+        self.audit.append(
+            {
+                "rule_triggered": "circuit_reset",
+                "decision": "ALLOW",
+                "actor": actor,
+                "reason": reason,
+            }
+        )
+
     def execute_guarded(
         self,
         action: str,
-        fn: Callable[[], Any],
+        fn: Callable[..., Any],
         context: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         ctx = dict(context or {})
@@ -84,18 +101,33 @@ class ReferenceRuntime:
             self.audit.append({**event, "action_taken": "quarantined_before_execution"})
             raise RuntimeBlocked(decision)
         if effect == "REQUIRE_HUMAN_APPROVAL":
-            if not self.approvals.is_approved(ctx.get("approval_ticket_id")):
+            ok = self.approvals.is_approved(
+                ctx.get("approval_ticket_id"),
+                action=action,
+                payload=ctx.get("approval_payload") or ctx.get("payload") or {},
+                execution_id=str(ctx.get("execution_id") or ""),
+                tool=str(ctx.get("tool") or ""),
+            )
+            if not ok:
                 self.audit.append({**event, "action_taken": "pending_approval"})
                 raise RuntimeBlocked(decision)
 
         call_ctx = dict(ctx)
         if effect == "LIMIT":
             max_records = int(decision.get("parameters", {}).get("max_records", 1000))
-            call_ctx["record_count"] = min(int(call_ctx.get("record_count") or 0), max_records)
+            records = call_ctx.get("records")
+            if isinstance(records, list) and len(records) > max_records:
+                call_ctx["records"] = records[:max_records]
+                call_ctx["records_truncated"] = True
+            call_ctx["record_count"] = (
+                len(call_ctx["records"]) if isinstance(call_ctx.get("records"), list) else min(int(call_ctx.get("record_count") or 0), max_records)
+            )
             call_ctx["limit_applied"] = max_records
 
         try:
-            result = fn()
+            result = _invoke(fn, call_ctx)
+        except (RuntimeBlocked, RuntimeStopped):
+            raise
         except Exception:
             self.consecutive_failures += 1
             if self.consecutive_failures >= 8:
@@ -104,21 +136,47 @@ class ReferenceRuntime:
             raise
 
         self.consecutive_failures = 0
-        if effect == "REDACT" and isinstance(result, dict):
-            result = {**result, "redacted": True}
-        self.audit.append({**event, "action_taken": "executed", "verification_outcome": "ran_under_policy"})
+        redacted_fields: list[str] = []
+        if effect == "REDACT":
+            fields = decision.get("parameters", {}).get("redact_fields") or []
+            try:
+                result, redacted_fields = apply_redaction(result, fields)
+            except ValueError:
+                deny = {**decision, "effect": "DENY", "explanation": "REDACT without field policy"}
+                self.audit.append({**event, "action_taken": "redact_denied"})
+                raise RuntimeBlocked(deny) from None
+            call_ctx["redacted_fields"] = redacted_fields
+        self.audit.append(
+            {
+                **event,
+                "action_taken": "executed",
+                "verification_outcome": "ran_under_policy",
+                "redacted_fields": redacted_fields,
+            }
+        )
         return {"status": "ok", "decision": decision, "result": result, "context": call_ctx}
+
+
+def _invoke(fn: Callable[..., Any], call_ctx: dict[str, Any]) -> Any:
+    try:
+        params = inspect.signature(fn).parameters
+    except (TypeError, ValueError):
+        return fn(call_ctx)
+    if len(params) == 0:
+        return fn()
+    return fn(call_ctx)
 
 
 _default_runtime: ReferenceRuntime | None = None
 
 
 def get_runtime() -> ReferenceRuntime:
+    """Per-process singleton. Not shared across workers or replicas."""
     global _default_runtime
     if _default_runtime is None:
         _default_runtime = ReferenceRuntime()
     return _default_runtime
 
 
-def execute_guarded(action: str, fn: Callable[[], Any], context: dict[str, Any] | None = None) -> dict[str, Any]:
+def execute_guarded(action: str, fn: Callable[..., Any], context: dict[str, Any] | None = None) -> dict[str, Any]:
     return get_runtime().execute_guarded(action, fn, context)

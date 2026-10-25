@@ -10,6 +10,9 @@
 !porto*.png
 
 !app.py
+!api_server.py
+!utils/
+!utils/*.py
 !pages/
 !pages/*.py
 
@@ -26,7 +29,11 @@
 
 !docs/
 !docs/governance/
-!docs/governance/**
+!docs/governance/LINE_REPORT.md
+
+docs/governance/assessments/
+docs/governance/control_plane_audit.jsonl
+docs/governance/policies.json
 
 __pycache__/
 *.py[cod]

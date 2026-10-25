@@ -63,8 +63,9 @@ def render_text_pdf(title: str, lines: list[str]) -> bytes:
     """Minimal PDF 1.4 (Helvetica). For lab export without extra dependencies."""
     escaped = []
     for raw in lines:
-        text = raw.replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)")
-        escaped.append(text[:110])
+        clipped = raw[:110]
+        text = clipped.replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)")
+        escaped.append(text)
     content = ["BT", "/F1 11 Tf", "50 780 Td", f"({title[:90]}) Tj", "/F1 9 Tf", "0 -18 Td"]
     for line in escaped:
         content.append(f"({line}) Tj")

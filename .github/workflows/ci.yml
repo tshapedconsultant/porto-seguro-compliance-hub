@@ -22,7 +22,7 @@ jobs:
           pip install -r requirements_streamlit.txt -r requirements_api.txt
           pip install pytest pandas numpy
       - name: Governance and control-plane tests
-        run: python -m pytest tests/test_dpia_workspace.py tests/test_control_plane.py tests/test_api_security.py tests/test_import_surface.py -q
+        run: python -m pytest tests/test_dpia_workspace.py tests/test_control_plane.py tests/test_control_plane_security.py tests/test_api_security.py tests/test_import_surface.py -q
       - name: Import surface
         run: python -c "from utils.data_loaders import load_model_info; import api_server; from src.control_plane.runtime import execute_guarded; assert api_server.app is not None"
 

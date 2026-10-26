@@ -6,7 +6,7 @@ import os
 from pathlib import Path
 from typing import Any, Callable
 
-from src.control_plane.approvals import ApprovalStore
+from src.control_plane.approvals import ApprovalDesyncError, ApprovalStore
 from src.control_plane.audit import AuditLog
 from src.control_plane.default_policies import DEFAULT_POLICIES, TOOL_ALLOWLIST
 from src.control_plane.evaluator import (
@@ -15,6 +15,7 @@ from src.control_plane.evaluator import (
     evaluate_policies,
     validate_policy,
 )
+from src.control_plane.lease import check_exclusive_or_refuse
 from src.control_plane.redaction import RedactionError, apply_redaction
 
 logger = logging.getLogger(__name__)
@@ -31,7 +32,7 @@ class RuntimeStopped(RuntimeBlocked):
 
 
 def _stop_file_active() -> bool:
-    """Shared emergency stop via filesystem (cheap multi-worker signal)."""
+    """Shared emergency stop via filesystem (cheap multi-worker signal — not transactional)."""
     raw = (os.getenv("STOP_FILE") or "").strip()
     if not raw:
         return False
@@ -46,11 +47,15 @@ class ReferenceRuntime:
     - ``get_runtime()`` is a **per-process** singleton. stop / circuit / approvals
       do **not** share memory across uvicorn workers — use ``uvicorn --workers 1``
       for coherent demo control-plane state.
-    - Optional ``STOP_FILE`` (env path): every worker checks ``Path.exists()`` on
-      each ``execute_guarded`` so emergency stop can be shared via filesystem.
-      In-memory ``stop_requested`` remains process-local.
+    - Optional ``STOP_FILE`` (env path): emergency brake, not transactional.
+      Checked before invoke; for internal/predict actions also after invoke.
+      Race window: in-flight work may finish after the file appears; predict still
+      returns with ``interrupted_by_stop=True`` + audit ``stop_during_execution``.
+      Export-like (external-effect) actions use pre-check only (block before call).
     - Approval JSON store is rewritable (not WORM); AuditLog appends are local
       append-only only.
+    - ``WEB_CONCURRENCY`` misses horizontal replicas; optional FS lease via
+      ``INSTANCE_ID`` + ``CONTROL_PLANE_LEASE_DIR`` (not Redis).
     """
 
     def __init__(
@@ -176,13 +181,22 @@ class ReferenceRuntime:
         if effect == "ALERT":
             self.audit.append({**event, "action_taken": "alert_recorded", "notification": "audit_only"})
         if effect == "REQUIRE_HUMAN_APPROVAL":
-            ok = self.approvals.is_approved(
-                ctx.get("approval_ticket_id"),
-                action=action,
-                payload=ctx.get("approval_payload") or ctx.get("payload") or {},
-                execution_id=str(ctx.get("execution_id") or ""),
-                tool=str(ctx.get("tool") or ""),
-            )
+            try:
+                ok = self.approvals.is_approved(
+                    ctx.get("approval_ticket_id"),
+                    action=action,
+                    payload=ctx.get("approval_payload") or ctx.get("payload") or {},
+                    execution_id=str(ctx.get("execution_id") or ""),
+                    tool=str(ctx.get("tool") or ""),
+                )
+            except ApprovalDesyncError as exc:
+                deny = {
+                    **decision,
+                    "effect": "DENY",
+                    "explanation": f"Approval audit desync (strict): {exc}",
+                }
+                self.audit.append({**event, "action_taken": "approval_audit_desync"})
+                raise RuntimeBlocked(deny) from exc
             if not ok:
                 self.audit.append({**event, "action_taken": "pending_approval"})
                 raise RuntimeBlocked(decision)
@@ -208,6 +222,8 @@ class ReferenceRuntime:
             )
             call_ctx["limit_applied"] = max_records
 
+        # External-effect: pre-check only (already enforced via stop policy above).
+        # Internal/predict: also re-check STOP_FILE after invoke — race window documented.
         try:
             result = _invoke(fn, call_ctx)
         except (RuntimeBlocked, RuntimeStopped):
@@ -218,6 +234,27 @@ class ReferenceRuntime:
                 self.circuit_open = True
             self.audit.append({**event, "action_taken": "function_error"})
             raise
+
+        interrupted = False
+        if action not in EXTERNAL_EFFECT_ACTIONS:
+            post_file_stop = _stop_file_active()
+            if post_file_stop and not file_stop:
+                interrupted = True
+                self.audit.append(
+                    {
+                        **event,
+                        "action_taken": "stop_during_execution",
+                        "decision": "STOP",
+                        "rule_triggered": "stop_during_execution",
+                        "note": (
+                            "STOP_FILE appeared after invoke started; compute already happened. "
+                            "Emergency brake is not transactional — result returned with "
+                            "interrupted_by_stop=True."
+                        ),
+                    }
+                )
+                call_ctx["interrupted_by_stop"] = True
+                call_ctx["stop_file_active"] = True
 
         self.consecutive_failures = 0
         redacted_fields: list[str] = []
@@ -236,9 +273,16 @@ class ReferenceRuntime:
                 "action_taken": "executed",
                 "verification_outcome": "ran_under_policy",
                 "redacted_fields": redacted_fields,
+                "interrupted_by_stop": interrupted,
             }
         )
-        return {"status": "ok", "decision": decision, "result": result, "context": call_ctx}
+        return {
+            "status": "ok",
+            "decision": decision,
+            "result": result,
+            "context": call_ctx,
+            "interrupted_by_stop": interrupted,
+        }
 
 
 def _invoke(fn: Callable[..., Any], call_ctx: dict[str, Any]) -> Any:
@@ -255,7 +299,10 @@ _default_runtime: ReferenceRuntime | None = None
 
 
 def _configured_worker_count() -> int | None:
-    """Best-effort: WEB_CONCURRENCY / UVICORN_WORKERS when set by the launcher."""
+    """Best-effort: WEB_CONCURRENCY / UVICORN_WORKERS when set by the launcher.
+
+    Misses horizontal replicas (1 worker × N containers). Pair with FS lease.
+    """
     for key in ("WEB_CONCURRENCY", "UVICORN_WORKERS", "WORKERS"):
         raw = (os.getenv(key) or "").strip()
         if not raw:
@@ -272,7 +319,8 @@ def get_runtime() -> ReferenceRuntime:
     Per-process singleton. Not shared across uvicorn workers.
 
     Corrupt policy files fail closed; missing files may use bundled defaults.
-    Set ``CONTROL_PLANE_STRICT=true`` to refuse init when worker env > 1.
+    Set ``CONTROL_PLANE_STRICT=true`` to refuse init when worker env > 1 or when
+    multiple recent FS lease heartbeats exist under ``CONTROL_PLANE_LEASE_DIR``.
     """
     global _default_runtime
     if _default_runtime is None:
@@ -285,7 +333,9 @@ def get_runtime() -> ReferenceRuntime:
         if workers is not None and workers > 1:
             msg = (
                 "control plane state is process-local (stop/approvals/circuit); "
-                f"configured workers={workers}. Use uvicorn --workers 1 for demo coherence."
+                f"configured workers={workers}. Use uvicorn --workers 1 for demo coherence. "
+                "WEB_CONCURRENCY etc. miss horizontal replicas — set INSTANCE_ID + "
+                "CONTROL_PLANE_LEASE_DIR for FS heartbeat detection."
             )
             if strict:
                 raise RuntimeError(f"CONTROL_PLANE_STRICT: {msg}")
@@ -293,8 +343,14 @@ def get_runtime() -> ReferenceRuntime:
         else:
             logger.warning(
                 "control plane state is process-local; use uvicorn --workers 1 "
-                "(optional STOP_FILE shares emergency stop via filesystem)."
+                "(optional STOP_FILE shares emergency stop via filesystem — not transactional). "
+                "WEB_CONCURRENCY misses horizontal replicas; optional CONTROL_PLANE_LEASE_DIR "
+                "heartbeats are best-effort FS leases, not Redis."
             )
+
+        lease_ok, lease_msg = check_exclusive_or_refuse(strict=strict)
+        if not lease_ok:
+            raise RuntimeError(f"CONTROL_PLANE_STRICT: {lease_msg}")
 
         require = os.getenv("REQUIRE_POLICIES_FILE", "").lower() in ("1", "true", "yes")
         store = ControlPlaneStore()

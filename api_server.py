@@ -2,15 +2,18 @@
 FastAPI REST API Server for Insurance Claim Prediction
 Part of Insurance Claim Prediction - Responsible AI Architecture
 
-Deployment limits / not multi-worker safe (see README + LINE_REPORT):
-- In-memory rate limiter is **demo-only** (per process). Use gateway limits
-  (nginx/Cloudflare) for multi-replica. ``RATE_LIMIT_BACKEND=memory|disabled``.
+Deployment limits / not multi-worker safe (see README + LINE_REPORT "What this still is not"):
+- In-memory rate limiter is **demo-only** (per process). No shared backend.
+  Use gateway limits (nginx / Cloudflare / API gateway). ``RATE_LIMIT_BACKEND=memory|disabled``.
 - ``TRUST_PROXY`` honors X-Forwarded-For only when the TCP peer is in
   ``TRUSTED_PROXY_IPS`` / ``TRUSTED_PROXY_CIDRS`` (fail closed otherwise).
-- Approvals use free-text reviewer/requester strings (not SSO). Set
-  ``REQUIRE_AUTH=true`` + ``API_KEY`` for static key gate on predict/approvals.
+- Static ``API_KEY`` (+ optional ``APPROVAL_API_KEY`` for /approvals/decide) —
+  no identity, expiry, revocation, or scopes. Still not OIDC/JWT.
+  ``APPROVAL_SEPARATE_ACTORS=true`` rejects reviewer==requester (demo SoD).
 - Control-plane stop/circuit/approvals are process-local; prefer
-  ``uvicorn --workers 1``. Optional ``STOP_FILE`` shares emergency stop via FS.
+  ``uvicorn --workers 1``. Optional ``STOP_FILE`` is an emergency brake (not
+  transactional — race window for in-flight work). ``CONTROL_PLANE_LEASE_DIR``
+  FS heartbeats are best-effort; WEB_CONCURRENCY misses horizontal replicas.
 """
 
 from __future__ import annotations
@@ -44,6 +47,8 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 API_KEY = os.getenv("API_KEY")
+# Optional second key for /approvals/decide (separation-of-duties demo — not OIDC).
+APPROVAL_API_KEY = os.getenv("APPROVAL_API_KEY") or None
 REQUIRE_AUTH = os.getenv("REQUIRE_AUTH", "false").lower() in ("1", "true", "yes")
 RATE_LIMIT_PER_MINUTE = int(os.getenv("RATE_LIMIT_PER_MINUTE", "60"))
 RATE_LIMIT_BACKEND = (os.getenv("RATE_LIMIT_BACKEND", "memory") or "memory").strip().lower()
@@ -145,8 +150,19 @@ def _client_ip(request: Request) -> str:
     )
 
 
+def _key_matches(provided: Optional[str], expected: str) -> bool:
+    try:
+        return secrets.compare_digest(provided or "", expected)
+    except (TypeError, ValueError):
+        return False
+
+
 def _enforce_api_key(x_api_key: Optional[str]) -> None:
-    """Static API key gate. REQUIRE_AUTH=true demands API_KEY be configured."""
+    """
+    Static API key gate. No identity / expiry / revocation / scopes.
+
+    REQUIRE_AUTH=true demands API_KEY be configured. Still not OIDC.
+    """
     if REQUIRE_AUTH and not API_KEY:
         raise HTTPException(
             status_code=503,
@@ -154,20 +170,46 @@ def _enforce_api_key(x_api_key: Optional[str]) -> None:
         )
     if not API_KEY:
         return
-    provided = x_api_key or ""
-    try:
-        ok = secrets.compare_digest(provided, API_KEY)
-    except (TypeError, ValueError):
-        ok = False
-    if not ok:
+    if not _key_matches(x_api_key, API_KEY):
         raise HTTPException(status_code=401, detail="Invalid or missing API key.")
+
+
+def _enforce_approval_decide_key(x_api_key: Optional[str]) -> None:
+    """
+    Decide endpoint auth: prefer APPROVAL_API_KEY when set (SoD demo), else API_KEY.
+
+    Still a static shared secret — not OIDC, no reviewer≠API-principal binding.
+    """
+    expected = APPROVAL_API_KEY or API_KEY
+    if REQUIRE_AUTH and not expected:
+        raise HTTPException(
+            status_code=503,
+            detail="Server misconfigured: REQUIRE_AUTH=true but no API_KEY/APPROVAL_API_KEY.",
+        )
+    if not expected:
+        return
+    if not _key_matches(x_api_key, expected):
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid or missing approval API key (APPROVAL_API_KEY or API_KEY).",
+        )
+
+
+def _stop_file_blocks_request() -> None:
+    """Best-effort pre-check at API edge; race window remains for in-flight work."""
+    raw = (os.getenv("STOP_FILE") or "").strip()
+    if raw and Path(raw).exists():
+        raise HTTPException(
+            status_code=503,
+            detail="Inference stopped by STOP_FILE (emergency brake — not transactional).",
+        )
 
 
 def _enforce_rate_limit(request: Request) -> None:
     """
     In-memory per-process limiter (demo-only). Not effective across replicas/workers.
     Set RATE_LIMIT_BACKEND=disabled and enforce limits at the gateway in multi-replica.
-    No Redis backend ships here (avoid heavy deps); use nginx/Cloudflare rate limits.
+    No Redis / shared backend ships here; use nginx, Cloudflare, or an API gateway.
     """
     if RATE_LIMIT_BACKEND == "disabled":
         return
@@ -195,9 +237,11 @@ def _enforce_rate_limit(request: Request) -> None:
     rate_limit_bucket[client_ip] = history
 
 
-def _enforce_security(request: Request, x_api_key: Optional[str]) -> None:
+def _enforce_security(request: Request, x_api_key: Optional[str], *, check_stop: bool = False) -> None:
     _enforce_api_key(x_api_key)
     _enforce_rate_limit(request)
+    if check_stop:
+        _stop_file_blocks_request()
 
 
 def _expected_features() -> List[str]:
@@ -288,8 +332,10 @@ def _write_audit_log_sync(event: Dict[str, Any]) -> None:
                 "content_sha256": hashlib.sha256(AUDIT_LOG_PATH.read_bytes()).hexdigest(),
                 "signed_at": datetime.now().isoformat(),
                 "worm_claimed": False,
+                "kms_claimed": False,
                 "integrity_note": (
-                    "Local checkpoint only. True immutability needs an external append-only store."
+                    "Local checkpoint only. Dual-rewrite of JSONL + checkpoint defeats this check. "
+                    "Not KMS / not external WORM. Prefer Object Lock + independent verify in production."
                 ),
             }
             AUDIT_CHECKPOINT_PATH.write_text(
@@ -341,8 +387,9 @@ def _log_deployment_limits() -> None:
     else:
         logger.warning(
             "In-memory rate limiter is process-local (demo-only). "
-            "Ineffective behind multiple replicas/workers; use nginx/Cloudflare "
-            "or set RATE_LIMIT_BACKEND=disabled. No Redis backend in this build."
+            "Ineffective behind multiple replicas/workers; no shared backend in this build. "
+            "Recommended: RATE_LIMIT_BACKEND=disabled + enforce at nginx, Cloudflare, "
+            "AWS API Gateway, or Azure APIM. Redis rate-limit is NOT implemented here."
         )
     if TRUST_PROXY and not _TRUSTED_PROXY_NETWORKS:
         logger.warning(
@@ -350,9 +397,21 @@ def _log_deployment_limits() -> None:
         )
     if REQUIRE_AUTH and not API_KEY:
         logger.error("REQUIRE_AUTH=true but API_KEY unset — protected routes will return 503.")
+    if APPROVAL_API_KEY:
+        logger.info(
+            "APPROVAL_API_KEY set — /approvals/decide uses separate static key "
+            "(SoD demo; still not OIDC / no expiry / no revocation / no scopes)."
+        )
+    else:
+        logger.warning(
+            "API_KEY is a static shared secret (no identity/expiry/revocation/scopes). "
+            "Optional APPROVAL_API_KEY separates decide from general API — still not OIDC."
+        )
     logger.warning(
-        "control plane state is process-local; use uvicorn --workers 1 "
-        "(STOP_FILE optional for shared emergency stop). CONTROL_PLANE_STRICT=%s",
+        "control plane state is process-local; use uvicorn --workers 1. "
+        "STOP_FILE is an emergency brake (not transactional). "
+        "WEB_CONCURRENCY misses horizontal replicas — optional INSTANCE_ID + "
+        "CONTROL_PLANE_LEASE_DIR FS heartbeats. CONTROL_PLANE_STRICT=%s",
         CONTROL_PLANE_STRICT,
     )
 
@@ -441,6 +500,7 @@ class PredictionResponse(BaseModel):
     uncertainty_flag: bool
     request_id: str
     timestamp: str
+    interrupted_by_stop: bool = False
 
 
 class HealthResponse(BaseModel):
@@ -492,7 +552,8 @@ def decide_approval(
     http_request: Request,
     x_api_key: Optional[str] = Header(default=None),
 ) -> Dict[str, Any]:
-    _enforce_security(http_request, x_api_key)
+    _enforce_approval_decide_key(x_api_key)
+    _enforce_rate_limit(http_request)
     try:
         ticket = get_runtime().approvals.decide(
             ticket_id,
@@ -528,7 +589,7 @@ def predict(
 
     request_id = getattr(http_request.state, "request_id", "unknown")
     try:
-        _enforce_security(http_request, x_api_key)
+        _enforce_security(http_request, x_api_key, check_stop=True)
         input_data = _normalize_features(request.features)
         legal_effect = bool(get_runtime().flow_legal_effect)
 
@@ -569,6 +630,8 @@ def predict(
             },
         )
         result = guarded["result"]
+        if guarded.get("interrupted_by_stop"):
+            result = {**result, "interrupted_by_stop": True}
         _schedule_audit(
             background_tasks,
             {
@@ -582,6 +645,7 @@ def predict(
                 "uncertainty_flag": result["uncertainty_flag"],
                 "feature_count": len(request.features),
                 "policy_id": guarded["decision"].get("policy_id"),
+                "interrupted_by_stop": bool(guarded.get("interrupted_by_stop")),
             },
         )
         return result
@@ -607,7 +671,7 @@ def batch_predict(
         raise HTTPException(status_code=503, detail="Model not loaded")
 
     try:
-        _enforce_security(http_request, x_api_key)
+        _enforce_security(http_request, x_api_key, check_stop=True)
         if not request.records:
             raise HTTPException(status_code=422, detail="Batch payload must include at least one record.")
         if len(request.records) > MAX_BATCH_RECORDS:

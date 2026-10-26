@@ -74,25 +74,34 @@ flowchart TB
 ### Control plane limits (honest scope)
 
 - **Single-process** singleton (`src/control_plane/`) — stop / approvals / circuit breaker do **not** replicate across workers.
-- Audit JSONL is append-only + hash-chained + local checkpoint sidecar — **not WORM** (file can still be rewritten; true immutability needs Object Lock / external store).
-- Reviewer / requester strings are **not SSO** / authentication (no OIDC/JWT yet).
+- Audit JSONL is append-only + hash-chained + local checkpoint sidecar (+ optional `AUDIT_HMAC_KEY`) — **not WORM / not KMS** (dual-rewrite of JSONL + checkpoint defeats local check).
+- Reviewer / requester strings are **not SSO** / authentication (no OIDC/JWT).
 - Unclassified actions → **default-deny**; nested REDACT failures → fail-closed.
 - Application calendar (Art. 113 after **2026/1744**): general application **2026-08-02**; Annex III high-risk duties **2027-12-02** — see `src/control_plane/regulatory_library.py` (encoded dates, not a live EUR-Lex fetch).
+- **No GDPR / EU AI Act certification** — evidence packs and UI are lab artefacts, not AEPD / notified-body conformity.
+
+### What this still is not
+
+Honest gaps (demo / lab). Pragmatic mitigations raise the bar; they do **not** close production threat models.
+
+1. **Audit integrity ≠ WORM / KMS** — Checkpoint + JSONL (and optional HMAC) are filesystem-rewritable. They detect clumsy tamper, not an attacker with FS access who rewrites both files (and forges HMAC if they know `AUDIT_HMAC_KEY`). Production needs an external append-only / Object Lock store + KMS sign + independent verify. `AUDIT_HMAC_KEY` is a **shared secret**, not KMS.
+2. **`approvals.json` is authoritative and mutable** — Audit trail visibility ≠ prevent ticket edit. `ApprovalStore.verify_against_audit()` (+ optional `APPROVAL_AUDIT_STRICT`) detects obvious JSON↔audit desync; it does not make tickets immutable. Production needs Postgres/Redis transactions + append-only audit. `APPROVAL_BACKEND=memory|json` only (`redis`/`postgres` are interface stubs — not implemented).
+3. **`STOP_FILE` is an emergency brake, not transactional** — In-flight work may finish after the file appears. Predict: pre-check + post-check; if the file appears mid-flight, result still returns with `interrupted_by_stop=True` and audit `stop_during_execution`. Export-like (external-effect) actions use pre-check only. API `/predict` also pre-checks at the edge.
+4. **Worker / replica detection is best-effort** — `WEB_CONCURRENCY` / `UVICORN_WORKERS` / `WORKERS` miss horizontal replicas (1 worker × N containers). Optional `INSTANCE_ID` + `CONTROL_PLANE_LEASE_DIR` FS heartbeats (TTL ~60s); with `CONTROL_PLANE_STRICT` and >1 recent distinct instance IDs → refuse start. Cheap filesystem lease — **not Redis**.
+5. **Rate limit is local** — `RATE_LIMIT_BACKEND=memory|disabled`. No shared backend. Prefer disabled + gateway (nginx / Cloudflare / API Gateway / APIM).
+6. **API key is static** — No identity, expiry, revocation, or scopes. Optional `APPROVAL_API_KEY` for `/approvals/decide` and `APPROVAL_SEPARATE_ACTORS=true` (reject reviewer==requester) are SoD demos — **still not OIDC**.
 
 ### Deployment limits / not multi-worker safe
 
-Honest operational constraints (demo / lab — **not** production SSO, Redis, or WORM):
+See **What this still is not** above. Additional IP trust note:
 
-1. **Rate limiter** — in-memory per process (`RATE_LIMIT_BACKEND=memory`, default). Ineffective behind multiple replicas/workers. Set `RATE_LIMIT_BACKEND=disabled` and enforce limits at the gateway (nginx / Cloudflare). No Redis rate-limit backend ships in this build.
-2. **TRUST_PROXY / client IP** — `X-Forwarded-For` is spoofable unless the immediate TCP peer is allowlisted via `TRUSTED_PROXY_IPS` / `TRUSTED_PROXY_CIDRS`. If `TRUST_PROXY=true` with an empty allowlist, XFF is **ignored** (fail closed). When the peer is trusted, the **leftmost** XFF hop is used (single reverse-proxy pattern).
-3. **Approvals identity** — `requester` / `reviewer` remain free-text demo strings (binding only, not SSO). Set `REQUIRE_AUTH=true` + `API_KEY` so `/approvals/*` and predict require a static key. Responses include `reviewer_auth_note` / `authn_note`.
-4. **Approval persistence** — `docs/governance/approvals.json` is **rewritable JSON**, not an immutable/WORM log. Decide/consume/request also append to the control-plane `AuditLog` (hash-chained JSONL) as a local append-only trail — still not WORM.
-5. **`get_runtime()`** — per-process singleton. With uvicorn multi-worker, stop / approvals / circuit are **not** global. Prefer `uvicorn --workers 1`. Optional `STOP_FILE` path: every worker checks `Path.exists()` on each `execute_guarded` for a shared emergency stop. `CONTROL_PLANE_STRICT=true` refuses init when `WEB_CONCURRENCY` / `UVICORN_WORKERS` / `WORKERS` > 1.
+- **TRUST_PROXY / client IP** — `X-Forwarded-For` is spoofable unless the immediate TCP peer is allowlisted via `TRUSTED_PROXY_IPS` / `TRUSTED_PROXY_CIDRS`. If `TRUST_PROXY=true` with an empty allowlist, XFF is **ignored** (fail closed). When the peer is trusted, the **leftmost** XFF hop is used (single reverse-proxy pattern).
 
 ### Threat & assurance docs
 
 - [`docs/THREAT_MODEL.md`](docs/THREAT_MODEL.md) — STRIDE + trust boundaries for this stack
 - [`docs/ASSURANCE_MODEL.md`](docs/ASSURANCE_MODEL.md) — evidence present ≠ control effective ≠ conformity
+- [`docs/governance/DEMO_PLAYBOOK.md`](docs/governance/DEMO_PLAYBOOK.md) — sequence diagram + 2‑min incident + 90‑s DENY/approval/REDACT/audit demo (technical evidence; not certification)
 - Synthetic packs: [`examples/evidence/`](examples/evidence/) + schemas in [`docs/schemas/`](docs/schemas/)
 
 ### Threat & Governance Scope
@@ -117,10 +126,11 @@ Honest operational constraints (demo / lab — **not** production SSO, Redis, or
 
 | Gap | Honest status | Next concrete step |
 |-----|---------------|--------------------|
-| Shared stop / approvals / circuit breaker | In-process singleton; optional `STOP_FILE` only | Redis (or equivalent) shared state + sticky docs |
-| API auth | Optional static `API_KEY` (+ `REQUIRE_AUTH`) | OIDC/JWT with IdP; drop UI role spoofing |
-| Immutable audit | Local JSONL + hash chain + checkpoint (approval JSON still rewritable) | S3 Object Lock / WORM store + external verification |
-| Multi-replica rate limit | In-memory demo limiter | Gateway rate limit (nginx/Cloudflare); no Redis backend here |
+| Shared stop / approvals / circuit breaker | In-process; `STOP_FILE` + optional FS lease | Redis (or equivalent) shared state + sticky docs |
+| API auth | Static `API_KEY` / optional `APPROVAL_API_KEY` | OIDC/JWT with IdP; drop UI role spoofing |
+| Immutable audit | JSONL + checkpoint + optional HMAC (not KMS) | S3 Object Lock / WORM + KMS + independent verify |
+| Approval authority | Mutable JSON + audit desync check | Postgres/Redis transactions + append-only audit |
+| Multi-replica rate limit | In-memory demo limiter | Gateway rate limit; no Redis backend here |
 | Evidence vs effectiveness | Fields + assurance docs shipped | Operational owners + scheduled control tests |
 
 ---
@@ -263,7 +273,8 @@ porto-seguro/
 
 ## Line report (bottom-up)
 
-Operator facts first: [`docs/governance/LINE_REPORT.md`](docs/governance/LINE_REPORT.md).
+Operator facts first: [`docs/governance/LINE_REPORT.md`](docs/governance/LINE_REPORT.md).  
+Demo playbook (Mermaid + scripts): [`docs/governance/DEMO_PLAYBOOK.md`](docs/governance/DEMO_PLAYBOOK.md).
 
 ```bash
 pip install -r requirements_streamlit.txt -r requirements_api.txt

@@ -13,7 +13,7 @@ Hechos en disco, no intenciones.
 |---|---|---|
 | Pack EIPD estático | `gdpr_dpia_v1.json` | Presente (demo / laboratorio; no es expediente AEPD) |
 | Motor EIPD (workspace) | `src/governance/dpia_workspace/` | Código presente; assessments en `docs/governance/assessments/` **locales, no publicadas** |
-| Motor de políticas | `src/control_plane/` | Código presente; singleton **por proceso**; auditoría JSONL **no** WORM; **no** SSO; `STOP_FILE` opcional |
+| Motor de políticas | `src/control_plane/` | Código presente; singleton **por proceso**; auditoría JSONL **no** WORM/KMS; **no** SSO/OIDC; `STOP_FILE` + lease FS opcionales |
 | Página Streamlit pack | `pages/08_DPIA_GDPR.py` | Pack JSON + descarga; copy AEPD en español |
 | Model Card | `app.py` + `pages/*` | Arranca sin `train.csv` / `.pkl` (artefactos gitignored) |
 | API predicción | `api_server.py` `/predict` y `/batch_predict` | Pasan por `execute_guarded` **en este proceso**; rate limit in-memory demo; TRUST_PROXY con allowlist |
@@ -31,7 +31,7 @@ Comando de verificación de línea (mismo que CI de gobernanza):
 ```bash
 pip install -r requirements_streamlit.txt -r requirements_api.txt
 pip install pytest pandas numpy jsonschema scikit-learn
-python -m pytest tests/test_dpia_workspace.py tests/test_control_plane.py tests/test_api_security.py tests/test_import_surface.py tests/test_evidence_schemas.py -q
+python -m pytest tests/test_dpia_workspace.py tests/test_control_plane.py tests/test_control_plane_security.py tests/test_api_security.py tests/test_import_surface.py tests/test_evidence_schemas.py -q
 python -m pytest tests/test_synthetic_robustness.py -q
 ```
 
@@ -48,7 +48,8 @@ Calendario Art. 113 (codificado, no fetch en vivo a EUR-Lex): `src/control_plane
 5. Ticket de aprobación: sin `approve` la acción no corre; con revisor vacío, error; tickets de un solo uso.  
 6. Stop: `request_stop` → `RuntimeStopped` en la siguiente acción que pase por el adaptador.  
 7. API local: `python api_server.py` → `/predict` exige artefactos locales; sin modelo → unhealthy / 503.  
-8. Entrenamiento local (necesita `train.csv` Kaggle): `python run_training.py`.
+8. Entrenamiento local (necesita `train.csv` Kaggle): `python run_training.py`.  
+9. Demo técnica (secuencia Mermaid + incidente 2 min + guion 90 s): [`DEMO_PLAYBOOK.md`](DEMO_PLAYBOOK.md).
 
 Lo que la línea **no** puede afirmar: que stop/aprobaciones se repliquen entre workers; el runtime es un singleton **por proceso**. `/predict` y `/batch_predict` **sí** llaman a `execute_guarded` en este proceso. Métricas hold-out (ROC-AUC, F1, etc.) **no** equivalen a conformidad AEPD / RGPD / AI Act.
 
@@ -94,22 +95,30 @@ Clasificación de sistema: `is_legal_classification: false`. No se infiere high-
 - Demo vs producción: clone limpio = UI + control plane + tests de gobernanza; predicción y métricas “de producción” requieren datos/artefactos locales no versionados.  
 - Pack estático `gdpr_dpia_v1.json` ≠ workspace EIPD editable; scores residuales del pack estático son **estimated pending verification**.
 
+### What this still is not / Lo que esto sigue sin ser
+
+Huecos honestos (demo / laboratorio). Mitigaciones pragmáticas suben el listón; **no** cierran el modelo de amenaza de producción. **No** hay certificación RGPD / AI Act.
+
+1. **Integridad de auditoría ≠ WORM / KMS** — Checkpoint + JSONL (+ `AUDIT_HMAC_KEY` opcional) son reescribibles en disco. Detectan manipulación torpe, no a un atacante con acceso al FS que reescriba ambos ficheros (y falsifique HMAC si conoce la clave). Producción: almacén append-only / Object Lock + firma KMS + verificación independiente. `AUDIT_HMAC_KEY` es **secreto compartido**, no KMS.
+2. **`approvals.json` es autoritativo y mutable** — Ver el audit trail ≠ impedir editar el ticket. `verify_against_audit()` (+ `APPROVAL_AUDIT_STRICT`) detecta desync obvio JSON↔audit; no hace inmutables los tickets. Producción: Postgres/Redis transaccional + audit append-only. `APPROVAL_BACKEND=memory|json` solamente (stubs `redis`/`postgres` — no implementados).
+3. **`STOP_FILE` es freno de emergencia, no transaccional** — Trabajo in-flight puede terminar después de crear el fichero. Predict: pre-check + post-check; si aparece a mitad, se devuelve resultado con `interrupted_by_stop=True` y audit `stop_during_execution`. Acciones export/external-effect: solo pre-check. `/predict` también pre-check en el borde API.
+4. **Detección de workers / réplicas es best-effort** — `WEB_CONCURRENCY` / `UVICORN_WORKERS` / `WORKERS` no ven réplicas horizontales (1 worker × N contenedores). Opcional `INSTANCE_ID` + `CONTROL_PLANE_LEASE_DIR` (TTL ~60s); con `CONTROL_PLANE_STRICT` y >1 instance IDs recientes → refuse start. Lease de FS barato — **no Redis**.
+5. **Rate limit es local** — `RATE_LIMIT_BACKEND=memory|disabled`. Sin backend compartido. Preferir disabled + gateway (nginx / Cloudflare / API Gateway / APIM).
+6. **API key estática** — Sin identidad, caducidad, revocación ni scopes. `APPROVAL_API_KEY` opcional para `/approvals/decide` y `APPROVAL_SEPARATE_ACTORS=true` (rechaza reviewer==requester) son demos de SoD — **sigue sin ser OIDC**.
+
 ### Límites de despliegue / no multi-worker safe
 
-Restricciones operativas honestas (demo / laboratorio — **no** SSO, Redis ni WORM de producción):
+Ver **What this still is not** arriba. Nota adicional de confianza de IP:
 
-1. **Rate limit** — contador en memoria **por proceso** (`RATE_LIMIT_BACKEND=memory`). Ineficaz con varias réplicas/workers. En multi-réplica: `RATE_LIMIT_BACKEND=disabled` + límite en gateway (nginx / Cloudflare). Este build **no** incluye backend Redis.
-2. **TRUST_PROXY / IP cliente** — `X-Forwarded-For` es spoofable si no hay hop de confianza. Solo se honra XFF si el peer TCP está en `TRUSTED_PROXY_IPS` / `TRUSTED_PROXY_CIDRS`. Con `TRUST_PROXY=true` sin allowlist → se **ignora** XFF (fail closed). Con peer de confianza → hop **más a la izquierda** de XFF (patrón de un reverse proxy).
-3. **Identidad en aprobaciones** — `requester` / `reviewer` siguen siendo strings de demo (binding only, **no** SSO). `REQUIRE_AUTH=true` + `API_KEY` obliga clave estática en `/approvals/*` y predict. Respuestas llevan `reviewer_auth_note` / `authn_note`.
-4. **Persistencia de tickets** — `approvals.json` es JSON **reescribible**, no log WORM. request/decide/consume también hacen `audit.append` al JSONL hash-encadenado (rastro append-only local; **sigue sin ser** WORM).
-5. **`get_runtime()`** — singleton **por proceso**. Con uvicorn multi-worker, stop / approvals / circuit **no** son globales. Usar `uvicorn --workers 1`. Opcional `STOP_FILE`: cada worker mira `Path.exists()` en cada `execute_guarded`. `CONTROL_PLANE_STRICT=true` rechaza init si `WEB_CONCURRENCY` / `UVICORN_WORKERS` / `WORKERS` > 1.
+- **TRUST_PROXY / IP cliente** — `X-Forwarded-For` es spoofable si no hay hop de confianza. Solo se honra XFF si el peer TCP está en `TRUSTED_PROXY_IPS` / `TRUSTED_PROXY_CIDRS`. Con `TRUST_PROXY=true` sin allowlist → se **ignora** XFF (fail closed). Con peer de confianza → hop **más a la izquierda** de XFF (patrón de un reverse proxy).
 
 ### Roadmap producción (P0 — no fingir como hecho)
 
 | Hueco | Estado actual | Siguiente paso concreto |
 |---|---|---|
-| Stop / approvals compartidos | Singleton in-process; `STOP_FILE` opcional | Redis (o equivalente) + documentación |
-| Auth API | `API_KEY` opcional (+ `REQUIRE_AUTH`) | OIDC/JWT con IdP |
-| Auditoría inmutable | JSONL + hash + checkpoint local (JSON de tickets sigue reescribible) | Object Lock / almacén externo + verificación independiente |
+| Stop / approvals compartidos | In-process; `STOP_FILE` + lease FS opcional | Redis (o equivalente) + documentación |
+| Auth API | `API_KEY` / `APPROVAL_API_KEY` estáticos | OIDC/JWT con IdP |
+| Auditoría inmutable | JSONL + checkpoint + HMAC opcional (no KMS) | Object Lock + KMS + verificación independiente |
+| Autoridad de aprobaciones | JSON mutable + chequeo desync | Postgres/Redis + audit append-only |
 | Rate limit multi-réplica | Limitador in-memory de demo | Límite en gateway; sin Redis aquí |
 | Evidencia vs efectividad | Campos + `ASSURANCE_MODEL.md` | Owners operativos + tests de control calendados |

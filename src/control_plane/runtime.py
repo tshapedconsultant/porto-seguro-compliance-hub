@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import inspect
+import logging
 import os
+from pathlib import Path
 from typing import Any, Callable
 
 from src.control_plane.approvals import ApprovalStore
@@ -15,6 +17,8 @@ from src.control_plane.evaluator import (
 )
 from src.control_plane.redaction import RedactionError, apply_redaction
 
+logger = logging.getLogger(__name__)
+
 
 class RuntimeBlocked(Exception):
     def __init__(self, decision: dict[str, Any]) -> None:
@@ -26,13 +30,27 @@ class RuntimeStopped(RuntimeBlocked):
     pass
 
 
+def _stop_file_active() -> bool:
+    """Shared emergency stop via filesystem (cheap multi-worker signal)."""
+    raw = (os.getenv("STOP_FILE") or "").strip()
+    if not raw:
+        return False
+    return Path(raw).exists()
+
+
 class ReferenceRuntime:
     """
     Level 3 only for actions that go through execute_guarded.
 
-    SINGLE PROCESS: stop_requested, circuit_open, consecutive_failures and
-    ApprovalStore are in-memory. Streamlit/FastAPI workers do not share this
-    state. Production must externalize stop, circuit, approvals, and audit.
+    Deployment limits / not multi-worker safe:
+    - ``get_runtime()`` is a **per-process** singleton. stop / circuit / approvals
+      do **not** share memory across uvicorn workers — use ``uvicorn --workers 1``
+      for coherent demo control-plane state.
+    - Optional ``STOP_FILE`` (env path): every worker checks ``Path.exists()`` on
+      each ``execute_guarded`` so emergency stop can be shared via filesystem.
+      In-memory ``stop_requested`` remains process-local.
+    - Approval JSON store is rewritable (not WORM); AuditLog appends are local
+      append-only only.
     """
 
     def __init__(
@@ -47,8 +65,13 @@ class ReferenceRuntime:
         policies_source: str = "constructor",
     ) -> None:
         self.policies = list(policies or DEFAULT_POLICIES)
-        self.approvals = approvals or ApprovalStore()
         self.audit = audit or AuditLog()
+        if approvals is not None:
+            self.approvals = approvals
+            if getattr(self.approvals, "audit", None) is None:
+                self.approvals.audit = self.audit
+        else:
+            self.approvals = ApprovalStore(audit=self.audit)
         self.stop_requested = False
         self.circuit_open = False
         self.consecutive_failures = 0
@@ -100,7 +123,9 @@ class ReferenceRuntime:
             ctx.pop("redact_output", None)
             ctx["legal_effect_decision"] = self.flow_legal_effect
             ctx["redact_output"] = self.redact_output
-        ctx["stop_requested"] = self.stop_requested or self.circuit_open
+        file_stop = _stop_file_active()
+        ctx["stop_requested"] = self.stop_requested or self.circuit_open or file_stop
+        ctx["stop_file_active"] = file_stop
         if action in EXTERNAL_EFFECT_ACTIONS:
             ctx["action_class"] = "external"
             ctx["side_effects"] = "external_disclosure"
@@ -229,13 +254,47 @@ def _invoke(fn: Callable[..., Any], call_ctx: dict[str, Any]) -> Any:
 _default_runtime: ReferenceRuntime | None = None
 
 
+def _configured_worker_count() -> int | None:
+    """Best-effort: WEB_CONCURRENCY / UVICORN_WORKERS when set by the launcher."""
+    for key in ("WEB_CONCURRENCY", "UVICORN_WORKERS", "WORKERS"):
+        raw = (os.getenv(key) or "").strip()
+        if not raw:
+            continue
+        try:
+            return int(raw)
+        except ValueError:
+            continue
+    return None
+
+
 def get_runtime() -> ReferenceRuntime:
-    """Per-process singleton. Corrupt policy files fail closed; missing files may use bundled defaults."""
+    """
+    Per-process singleton. Not shared across uvicorn workers.
+
+    Corrupt policy files fail closed; missing files may use bundled defaults.
+    Set ``CONTROL_PLANE_STRICT=true`` to refuse init when worker env > 1.
+    """
     global _default_runtime
     if _default_runtime is None:
         import json
 
         from src.control_plane.store import ControlPlaneStore
+
+        strict = os.getenv("CONTROL_PLANE_STRICT", "").lower() in ("1", "true", "yes")
+        workers = _configured_worker_count()
+        if workers is not None and workers > 1:
+            msg = (
+                "control plane state is process-local (stop/approvals/circuit); "
+                f"configured workers={workers}. Use uvicorn --workers 1 for demo coherence."
+            )
+            if strict:
+                raise RuntimeError(f"CONTROL_PLANE_STRICT: {msg}")
+            logger.error("CONTROL_PLANE_STRICT not set but %s", msg)
+        else:
+            logger.warning(
+                "control plane state is process-local; use uvicorn --workers 1 "
+                "(optional STOP_FILE shares emergency stop via filesystem)."
+            )
 
         require = os.getenv("REQUIRE_POLICIES_FILE", "").lower() in ("1", "true", "yes")
         store = ControlPlaneStore()
@@ -251,10 +310,12 @@ def get_runtime() -> ReferenceRuntime:
             source = "bundled_default"
         flow = os.getenv("FLOW_LEGAL_EFFECT", "").lower() in ("1", "true", "yes")
         redact = os.getenv("REDACT_OUTPUT", "").lower() in ("1", "true", "yes")
-        approvals = ApprovalStore(path="docs/governance/approvals.json")
+        audit = AuditLog()
+        approvals = ApprovalStore(path="docs/governance/approvals.json", audit=audit)
         _default_runtime = ReferenceRuntime(
             policies=policies,
             approvals=approvals,
+            audit=audit,
             derive_security_from_server=True,
             flow_legal_effect=flow,
             redact_output=redact,

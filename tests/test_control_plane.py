@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import time
 
 import pytest
@@ -42,6 +43,36 @@ def test_stop_switch(tmp_path):
     rt.request_stop("lab halt", "andre")
     with pytest.raises(RuntimeStopped):
         rt.execute_guarded("predict", lambda: 1, {})
+
+
+def test_stop_file_blocks_without_in_memory_flag(tmp_path, monkeypatch):
+    stop_path = tmp_path / "stop.flag"
+    stop_path.write_text("halt\n", encoding="utf-8")
+    monkeypatch.setenv("STOP_FILE", str(stop_path))
+    rt = _rt(tmp_path)
+    assert rt.stop_requested is False
+    with pytest.raises(RuntimeStopped):
+        rt.execute_guarded("predict_ebm", lambda: 1, {"tool": "predict_ebm", "record_count": 1})
+    stop_path.unlink()
+    out = rt.execute_guarded("predict_ebm", lambda: 1, {"tool": "predict_ebm", "record_count": 1})
+    assert out["status"] == "ok"
+
+
+def test_approval_events_append_to_audit(tmp_path):
+    audit = AuditLog(tmp_path / "apr_audit.jsonl")
+    store = ApprovalStore(audit=audit)
+    ticket = store.request(action="score", requester="u", reason="r", payload={"k": 1})
+    store.decide(ticket["ticket_id"], reviewer="rev", approve=True, rationale="ok")
+    assert store.is_approved(
+        ticket["ticket_id"], action="score", payload={"k": 1}
+    )
+    rows = audit.read_all()
+    kinds = [r.get("rule_triggered") for r in rows]
+    assert "approval_request" in kinds
+    assert "approval_decide" in kinds
+    assert "approval_consume" in kinds
+    assert all(r.get("worm_claimed") is False for r in rows if str(r.get("rule_triggered", "")).startswith("approval_"))
+    assert ticket.get("reviewer_auth_note")
 
 
 def test_limit_caps_records(tmp_path):
@@ -294,6 +325,20 @@ def test_audit_chain_detects_tamper(tmp_path):
     ok2, reason = log2.verify_chain()
     assert ok2 is False
     assert "chain_break" in reason
+
+
+def test_audit_checkpoint_detects_rewrite(tmp_path):
+    log = AuditLog(tmp_path / "a.jsonl")
+    log.append({"decision": "ALLOW"})
+    ok, _ = log.verify_checkpoint()
+    assert ok is True
+    assert log.checkpoint_path.exists()
+    assert json.loads(log.checkpoint_path.read_text(encoding="utf-8"))["worm_claimed"] is False
+    # Rewrite JSONL without updating checkpoint → mismatch (detection aid, not WORM).
+    log.path.write_text('{"tampered": true}\n', encoding="utf-8")
+    ok2, reason = log.verify_checkpoint()
+    assert ok2 is False
+    assert reason in {"event_count_mismatch", "tail_hash_mismatch", "content_digest_mismatch"}
 
 
 def test_action_field_cannot_spoof_export(tmp_path):

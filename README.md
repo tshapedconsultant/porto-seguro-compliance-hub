@@ -69,15 +69,31 @@ flowchart TB
 | **DPIA / EIPD page** | Sidebar **DPIA GDPR** | Static pack `gdpr_dpia_v1.json` + optional workspace under `src/governance/dpia_workspace/` (assessments **not** published) |
 | **Inference API** | `python api_server.py` → `:8000` | `/predict` & `/batch_predict` wrapped by `execute_guarded` **in-process**; needs local artifacts for healthy inference |
 | **ML pipeline** | `run_training.py` / `run_training_full.py` | Polars → feature engineering → EBM → explainability → monitoring; needs Kaggle `train.csv` locally |
-| **CI governance job** | `.github/workflows/ci.yml` | Installs Streamlit + API deps; runs DPIA / control-plane / import-surface pytest only |
+| **CI governance job** | `.github/workflows/ci.yml` | Governance + evidence-schema + synthetic robustness; optional ML suite `continue-on-error` |
 
 ### Control plane limits (honest scope)
 
 - **Single-process** singleton (`src/control_plane/`) — stop / approvals / circuit breaker do **not** replicate across workers.
-- Audit JSONL is hash-chained but **not WORM** (file can be rewritten).
-- Reviewer / requester strings are **not SSO** / authentication.
+- Audit JSONL is append-only + hash-chained + local checkpoint sidecar — **not WORM** (file can still be rewritten; true immutability needs Object Lock / external store).
+- Reviewer / requester strings are **not SSO** / authentication (no OIDC/JWT yet).
 - Unclassified actions → **default-deny**; nested REDACT failures → fail-closed.
 - Application calendar (Art. 113 after **2026/1744**): general application **2026-08-02**; Annex III high-risk duties **2027-12-02** — see `src/control_plane/regulatory_library.py` (encoded dates, not a live EUR-Lex fetch).
+
+### Deployment limits / not multi-worker safe
+
+Honest operational constraints (demo / lab — **not** production SSO, Redis, or WORM):
+
+1. **Rate limiter** — in-memory per process (`RATE_LIMIT_BACKEND=memory`, default). Ineffective behind multiple replicas/workers. Set `RATE_LIMIT_BACKEND=disabled` and enforce limits at the gateway (nginx / Cloudflare). No Redis rate-limit backend ships in this build.
+2. **TRUST_PROXY / client IP** — `X-Forwarded-For` is spoofable unless the immediate TCP peer is allowlisted via `TRUSTED_PROXY_IPS` / `TRUSTED_PROXY_CIDRS`. If `TRUST_PROXY=true` with an empty allowlist, XFF is **ignored** (fail closed). When the peer is trusted, the **leftmost** XFF hop is used (single reverse-proxy pattern).
+3. **Approvals identity** — `requester` / `reviewer` remain free-text demo strings (binding only, not SSO). Set `REQUIRE_AUTH=true` + `API_KEY` so `/approvals/*` and predict require a static key. Responses include `reviewer_auth_note` / `authn_note`.
+4. **Approval persistence** — `docs/governance/approvals.json` is **rewritable JSON**, not an immutable/WORM log. Decide/consume/request also append to the control-plane `AuditLog` (hash-chained JSONL) as a local append-only trail — still not WORM.
+5. **`get_runtime()`** — per-process singleton. With uvicorn multi-worker, stop / approvals / circuit are **not** global. Prefer `uvicorn --workers 1`. Optional `STOP_FILE` path: every worker checks `Path.exists()` on each `execute_guarded` for a shared emergency stop. `CONTROL_PLANE_STRICT=true` refuses init when `WEB_CONCURRENCY` / `UVICORN_WORKERS` / `WORKERS` > 1.
+
+### Threat & assurance docs
+
+- [`docs/THREAT_MODEL.md`](docs/THREAT_MODEL.md) — STRIDE + trust boundaries for this stack
+- [`docs/ASSURANCE_MODEL.md`](docs/ASSURANCE_MODEL.md) — evidence present ≠ control effective ≠ conformity
+- Synthetic packs: [`examples/evidence/`](examples/evidence/) + schemas in [`docs/schemas/`](docs/schemas/)
 
 ### Threat & Governance Scope
 
@@ -96,6 +112,16 @@ flowchart TB
 - Agentic AI runtime controls
 - LLM security threats
 - Supply-chain security
+
+### Roadmap to production (P0 — not implemented here)
+
+| Gap | Honest status | Next concrete step |
+|-----|---------------|--------------------|
+| Shared stop / approvals / circuit breaker | In-process singleton; optional `STOP_FILE` only | Redis (or equivalent) shared state + sticky docs |
+| API auth | Optional static `API_KEY` (+ `REQUIRE_AUTH`) | OIDC/JWT with IdP; drop UI role spoofing |
+| Immutable audit | Local JSONL + hash chain + checkpoint (approval JSON still rewritable) | S3 Object Lock / WORM store + external verification |
+| Multi-replica rate limit | In-memory demo limiter | Gateway rate limit (nginx/Cloudflare); no Redis backend here |
+| Evidence vs effectiveness | Fields + assurance docs shipped | Operational owners + scheduled control tests |
 
 ---
 
@@ -156,8 +182,9 @@ The architecture materializes audit logs into evidence packs for the dashboard. 
 | `docs/audit_results.json` | Per-pillar technical evidence status (local / generated) |
 | `docs/drift_monitoring_latest.json` | Latest data drift gate check (Art. 9) |
 | `docs/robustness_results.json` | Adversarial red teaming and noise tests (Art. 15) |
-| `eu_ai_act_conformity_v1.json` | Exportable evidence pack (demo; **not** a completed Art. 43 procedure) |
+| `eu_ai_act_conformity_v1.json` | Exportable evidence pack (demo; **not** a completed Art. 43 procedure); `schema_version` + assurance fields |
 | `gdpr_dpia_v1.json` | GDPR Art. 35 DPIA / EIPD pack (AEPD innovation-lab walkthrough; not a supervisory filing) |
+| `examples/evidence/*_synthetic.json` | Minimal synthetic packs (no Kaggle CSV); schema-validated in CI |
 | `training_results.json` | Hold-out metrics + optimal threshold parameters (local) |
 | `monitoring/performance_history.json` | Production ROC-AUC historical logs (local) |
 
@@ -240,8 +267,9 @@ Operator facts first: [`docs/governance/LINE_REPORT.md`](docs/governance/LINE_RE
 
 ```bash
 pip install -r requirements_streamlit.txt -r requirements_api.txt
-pip install pytest pandas numpy
-python -m pytest tests/test_dpia_workspace.py tests/test_control_plane.py tests/test_import_surface.py -q
+pip install pytest pandas numpy jsonschema scikit-learn
+python -m pytest tests/test_dpia_workspace.py tests/test_control_plane.py tests/test_import_surface.py tests/test_evidence_schemas.py -q
+python -m pytest tests/test_synthetic_robustness.py -q
 streamlit run app.py
 ```
 

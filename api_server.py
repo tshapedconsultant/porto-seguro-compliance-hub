@@ -1,6 +1,16 @@
 """
 FastAPI REST API Server for Insurance Claim Prediction
 Part of Insurance Claim Prediction - Responsible AI Architecture
+
+Deployment limits / not multi-worker safe (see README + LINE_REPORT):
+- In-memory rate limiter is **demo-only** (per process). Use gateway limits
+  (nginx/Cloudflare) for multi-replica. ``RATE_LIMIT_BACKEND=memory|disabled``.
+- ``TRUST_PROXY`` honors X-Forwarded-For only when the TCP peer is in
+  ``TRUSTED_PROXY_IPS`` / ``TRUSTED_PROXY_CIDRS`` (fail closed otherwise).
+- Approvals use free-text reviewer/requester strings (not SSO). Set
+  ``REQUIRE_AUTH=true`` + ``API_KEY`` for static key gate on predict/approvals.
+- Control-plane stop/circuit/approvals are process-local; prefer
+  ``uvicorn --workers 1``. Optional ``STOP_FILE`` shares emergency stop via FS.
 """
 
 from __future__ import annotations
@@ -24,22 +34,34 @@ from fastapi import BackgroundTasks, FastAPI, Header, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
-from src.control_plane.approvals import ApprovalError
+from src.control_plane.approvals import AUTHN_NOTE, ApprovalError
 from src.control_plane.binding import canonical_json
 from src.control_plane.runtime import RuntimeBlocked, RuntimeStopped, get_runtime
 from src.models.interpret_bridge import predict_proba_ebm
+from utils.client_ip import parse_trusted_proxy_networks, resolve_client_ip
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 API_KEY = os.getenv("API_KEY")
+REQUIRE_AUTH = os.getenv("REQUIRE_AUTH", "false").lower() in ("1", "true", "yes")
 RATE_LIMIT_PER_MINUTE = int(os.getenv("RATE_LIMIT_PER_MINUTE", "60"))
+RATE_LIMIT_BACKEND = (os.getenv("RATE_LIMIT_BACKEND", "memory") or "memory").strip().lower()
 MAX_FEATURES_PER_REQUEST = int(os.getenv("MAX_FEATURES_PER_REQUEST", "200"))
 AUDIT_LOG_PATH = Path(os.getenv("AUDIT_LOG_PATH", "logs/prediction_audit.jsonl"))
+AUDIT_CHECKPOINT_PATH = Path(
+    os.getenv("AUDIT_CHECKPOINT_PATH", str(AUDIT_LOG_PATH) + ".checkpoint.json")
+)
+_AUDIT_GENESIS = "0" * 64
 UNCERTAINTY_MARGIN = float(os.getenv("UNCERTAINTY_MARGIN", "0.05"))
 REQUIRE_ARTIFACT_HASH = os.getenv("REQUIRE_ARTIFACT_HASH", "false").lower() in ("1", "true", "yes")
 MAX_BATCH_RECORDS = int(os.getenv("MAX_BATCH_RECORDS", "1000"))
 TRUST_PROXY = os.getenv("TRUST_PROXY", "false").lower() in ("1", "true", "yes")
+_TRUSTED_PROXY_NETWORKS = parse_trusted_proxy_networks(
+    os.getenv("TRUSTED_PROXY_IPS", ""),
+    os.getenv("TRUSTED_PROXY_CIDRS", ""),
+)
+CONTROL_PLANE_STRICT = os.getenv("CONTROL_PLANE_STRICT", "").lower() in ("1", "true", "yes")
 
 app = FastAPI(
     title="Insurance Claim Prediction API",
@@ -114,22 +136,46 @@ def _verify_file_hash(path: Path, env_var_name: str) -> None:
 
 
 def _client_ip(request: Request) -> str:
-    if TRUST_PROXY:
-        forwarded = request.headers.get("X-Forwarded-For", "")
-        if forwarded:
-            return forwarded.split(",")[0].strip() or "unknown"
-    return request.client.host if request.client else "unknown"
+    peer = request.client.host if request.client else "unknown"
+    return resolve_client_ip(
+        peer,
+        request.headers.get("X-Forwarded-For"),
+        trust_proxy=TRUST_PROXY,
+        trusted_networks=_TRUSTED_PROXY_NETWORKS,
+    )
 
 
-def _enforce_security(request: Request, x_api_key: Optional[str]) -> None:
-    if API_KEY:
-        provided = x_api_key or ""
-        try:
-            ok = secrets.compare_digest(provided, API_KEY)
-        except (TypeError, ValueError):
-            ok = False
-        if not ok:
-            raise HTTPException(status_code=401, detail="Invalid or missing API key.")
+def _enforce_api_key(x_api_key: Optional[str]) -> None:
+    """Static API key gate. REQUIRE_AUTH=true demands API_KEY be configured."""
+    if REQUIRE_AUTH and not API_KEY:
+        raise HTTPException(
+            status_code=503,
+            detail="Server misconfigured: REQUIRE_AUTH=true but API_KEY is not set.",
+        )
+    if not API_KEY:
+        return
+    provided = x_api_key or ""
+    try:
+        ok = secrets.compare_digest(provided, API_KEY)
+    except (TypeError, ValueError):
+        ok = False
+    if not ok:
+        raise HTTPException(status_code=401, detail="Invalid or missing API key.")
+
+
+def _enforce_rate_limit(request: Request) -> None:
+    """
+    In-memory per-process limiter (demo-only). Not effective across replicas/workers.
+    Set RATE_LIMIT_BACKEND=disabled and enforce limits at the gateway in multi-replica.
+    No Redis backend ships here (avoid heavy deps); use nginx/Cloudflare rate limits.
+    """
+    if RATE_LIMIT_BACKEND == "disabled":
+        return
+    if RATE_LIMIT_BACKEND not in ("memory", "disabled"):
+        logger.warning(
+            "Unknown RATE_LIMIT_BACKEND=%s — treating as memory (process-local).",
+            RATE_LIMIT_BACKEND,
+        )
 
     now = time.time()
     window_start = now - 60
@@ -147,6 +193,11 @@ def _enforce_security(request: Request, x_api_key: Optional[str]) -> None:
         raise HTTPException(status_code=429, detail="Rate limit exceeded. Try again later.")
     history.append(now)
     rate_limit_bucket[client_ip] = history
+
+
+def _enforce_security(request: Request, x_api_key: Optional[str]) -> None:
+    _enforce_api_key(x_api_key)
+    _enforce_rate_limit(request)
 
 
 def _expected_features() -> List[str]:
@@ -188,14 +239,63 @@ def _normalize_features(raw_features: Dict[str, Any]) -> Dict[str, Optional[floa
     return normalized
 
 
+def _prediction_audit_tail_hash() -> str:
+    if not AUDIT_LOG_PATH.exists():
+        return _AUDIT_GENESIS
+    last = _AUDIT_GENESIS
+    with open(AUDIT_LOG_PATH, "r", encoding="utf-8") as handle:
+        for line in handle:
+            if not line.strip():
+                continue
+            try:
+                row = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            last = row.get("event_hash") or last
+    return last
+
+
 def _write_audit_log_sync(event: Dict[str, Any]) -> None:
-    """Atomic append to JSONL audit trail."""
+    """
+    Append-only JSONL with a lightweight hash chain + checkpoint sidecar.
+
+    Not WORM: local files remain rewriteable. Prefer Object Lock / external store in production.
+    """
     try:
         AUDIT_LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
-        line = json.dumps(event, ensure_ascii=False) + "\n"
         with _audit_lock:
-            with open(AUDIT_LOG_PATH, "a", encoding="utf-8") as f:
-                f.write(line)
+            previous = _prediction_audit_tail_hash()
+            body = {
+                k: v
+                for k, v in event.items()
+                if k not in {"event_hash", "previous_event_hash"}
+            }
+            canonical = json.dumps(body, sort_keys=True, separators=(",", ":"), default=str)
+            digest = hashlib.sha256((canonical + previous).encode("utf-8")).hexdigest()
+            record = {
+                **body,
+                "previous_event_hash": previous,
+                "event_hash": digest,
+            }
+            with open(AUDIT_LOG_PATH, "a", encoding="utf-8") as handle:
+                handle.write(json.dumps(record, ensure_ascii=False) + "\n")
+            # Local integrity snapshot (detection aid only — worm_claimed is always false).
+            event_count = sum(1 for line in AUDIT_LOG_PATH.read_text(encoding="utf-8").splitlines() if line.strip())
+            checkpoint = {
+                "audit_path": str(AUDIT_LOG_PATH).replace("\\", "/"),
+                "event_count": event_count,
+                "tail_event_hash": digest,
+                "content_sha256": hashlib.sha256(AUDIT_LOG_PATH.read_bytes()).hexdigest(),
+                "signed_at": datetime.now().isoformat(),
+                "worm_claimed": False,
+                "integrity_note": (
+                    "Local checkpoint only. True immutability needs an external append-only store."
+                ),
+            }
+            AUDIT_CHECKPOINT_PATH.write_text(
+                json.dumps(checkpoint, indent=2, ensure_ascii=False) + "\n",
+                encoding="utf-8",
+            )
     except Exception as exc:
         logger.warning("Could not write audit log: %s", exc)
 
@@ -209,15 +309,7 @@ def _require_api_key(x_api_key: Optional[str]) -> None:
 
 
 def _enforce_security_key_only(x_api_key: Optional[str]) -> None:
-    if not API_KEY:
-        return
-    provided = x_api_key or ""
-    try:
-        ok = secrets.compare_digest(provided, API_KEY)
-    except (TypeError, ValueError):
-        ok = False
-    if not ok:
-        raise HTTPException(status_code=401, detail="Invalid or missing API key.")
+    _enforce_api_key(x_api_key)
 
 
 def _features_binding(normalized: Dict[str, Any]) -> Dict[str, Any]:
@@ -242,9 +334,40 @@ async def attach_request_id(request: Request, call_next):
     return response
 
 
+def _log_deployment_limits() -> None:
+    """Honest startup warnings: process-local rate limit + control plane."""
+    if RATE_LIMIT_BACKEND == "disabled":
+        logger.info("RATE_LIMIT_BACKEND=disabled — rely on gateway rate limits.")
+    else:
+        logger.warning(
+            "In-memory rate limiter is process-local (demo-only). "
+            "Ineffective behind multiple replicas/workers; use nginx/Cloudflare "
+            "or set RATE_LIMIT_BACKEND=disabled. No Redis backend in this build."
+        )
+    if TRUST_PROXY and not _TRUSTED_PROXY_NETWORKS:
+        logger.warning(
+            "TRUST_PROXY=true without TRUSTED_PROXY_IPS/CIDRS — X-Forwarded-For ignored."
+        )
+    if REQUIRE_AUTH and not API_KEY:
+        logger.error("REQUIRE_AUTH=true but API_KEY unset — protected routes will return 503.")
+    logger.warning(
+        "control plane state is process-local; use uvicorn --workers 1 "
+        "(STOP_FILE optional for shared emergency stop). CONTROL_PLANE_STRICT=%s",
+        CONTROL_PLANE_STRICT,
+    )
+
+
 @app.on_event("startup")
 def load_model() -> None:
     global model, feature_engineer, optimal_threshold
+
+    _log_deployment_limits()
+    # Touch get_runtime early so CONTROL_PLANE_STRICT / worker env is evaluated at boot.
+    try:
+        get_runtime()
+    except RuntimeError as exc:
+        logger.error("Control plane init refused: %s", exc)
+        raise
 
     try:
         artifacts_dir = Path(os.getenv("ARTIFACTS_DIR", "models/artifacts"))
@@ -357,7 +480,8 @@ def request_approval(
         ttl_seconds=body.ttl_seconds,
         execution_id="",
     )
-    ticket["authn_note"] = "reviewer/requester strings are not SSO identities"
+    ticket["authn_note"] = AUTHN_NOTE
+    ticket["reviewer_auth_note"] = AUTHN_NOTE
     return ticket
 
 
@@ -370,12 +494,15 @@ def decide_approval(
 ) -> Dict[str, Any]:
     _enforce_security(http_request, x_api_key)
     try:
-        return get_runtime().approvals.decide(
+        ticket = get_runtime().approvals.decide(
             ticket_id,
             reviewer=body.reviewer,
             approve=body.approve,
             rationale=body.rationale,
         )
+        ticket["authn_note"] = AUTHN_NOTE
+        ticket["reviewer_auth_note"] = AUTHN_NOTE
+        return ticket
     except ApprovalError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 

@@ -62,6 +62,8 @@ if __name__ == "__main__":
         print("Artifacts Saved:")
         print(f"   Model: {results['paths']['model']}")
         print(f"   Feature Engineer: {results['paths']['feature_engineer']}")
+        print(f"   Run manifest: {results['paths'].get('run_manifest')}")
+        print(f"   Run id: {results.get('run_id')}")
         print(f"   Results: training_results.json")
         print()
         print("[SUCCESS] Pipeline executed successfully!")

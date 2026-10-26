@@ -5,12 +5,21 @@ on:
     branches: [master]
   pull_request:
   workflow_dispatch:
+    inputs:
+      suite:
+        description: "default = path/schedule rules; release = always run ML suite"
+        type: choice
+        options:
+          - default
+          - release
+        default: default
   schedule:
-    # Weekly optional ML suite (Sunday 06:00 UTC)
+    # Weekly ML suite (Sunday 06:00 UTC)
     - cron: "0 6 * * 0"
 
 jobs:
   tests:
+    # Governance / control-plane — required on every PR/push.
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -26,19 +35,63 @@ jobs:
       - name: Import surface
         run: python -c "from utils.data_loaders import load_model_info; import api_server; from src.control_plane.runtime import execute_guarded; assert api_server.app is not None"
 
+  ml-paths:
+    # Detect ML-relevant path changes for PR/push. Always true for schedule / workflow_dispatch.
+    runs-on: ubuntu-latest
+    outputs:
+      ml: ${{ steps.filter.outputs.ml }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Path filter
+        id: filter
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "${{ github.event_name }}" == "schedule" || "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            echo "ml=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            BASE="${{ github.event.pull_request.base.sha }}"
+            HEAD="${{ github.event.pull_request.head.sha }}"
+          else
+            BASE="${{ github.event.before }}"
+            HEAD="${{ github.sha }}"
+            if [[ -z "$BASE" || "$BASE" == "0000000000000000000000000000000000000000" ]]; then
+              echo "ml=true" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+          fi
+          CHANGED=$(git diff --name-only "$BASE" "$HEAD" || true)
+          echo "Changed files:"
+          echo "$CHANGED"
+          PATTERN='^(src/models/|src/data_processing/|src/monitoring/|tests/test_.*ebm|tests/test_feature|tests/test_drift|tests/test_model|tests/test_robust|tests/test_fairness|tests/test_proper|tests/test_synthetic_robust|requirements-ml\.|run_training)'
+          if echo "$CHANGED" | grep -E "$PATTERN" >/dev/null; then
+            echo "ml=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ml=false" >> "$GITHUB_OUTPUT"
+          fi
+
   ml-synthetic:
-    # Optional heavy job: manual workflow_dispatch or weekly schedule only.
-    # Does not run on PR/push so governance CI stays the merge gate.
-    if: github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
+    needs: ml-paths
+    # Path-filtered on PR/push; weekly schedule; any workflow_dispatch (incl. release).
+    if: needs.ml-paths.outputs.ml == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Install ML test deps
-        run: pip install -r requirements-ml.txt
-      - name: Synthetic EBM / FE / drift suite
+      - name: Install ML test deps (lock preferred)
+        run: |
+          if [ -f requirements-ml.lock ]; then
+            pip install -r requirements-ml.lock
+          else
+            pip install -r requirements-ml.txt
+          fi
+      - name: Synthetic EBM / FE / drift / robustness suite
         run: >
           python -m pytest
           tests/test_feature_engineering.py
@@ -48,5 +101,6 @@ jobs:
           tests/test_model_evaluation.py
           tests/test_robustness.py
           tests/test_fairness_subgroups.py
+          tests/test_synthetic_robustness.py
           -q
           --tb=short

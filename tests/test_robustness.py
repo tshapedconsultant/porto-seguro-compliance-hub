@@ -159,3 +159,124 @@ def test_prediction_with_shuffled_column_order():
         pred_a = predict_with_pipeline(results["model"], results["feature_engineer"], ordered)
         pred_b = predict_with_pipeline(results["model"], results["feature_engineer"], shuffled)
         np.testing.assert_allclose(pred_a["probabilities"], pred_b["probabilities"], rtol=1e-6, atol=1e-6)
+
+
+@pytest.mark.skipif(not INTERPRET_AVAILABLE, reason="interpret package not installed")
+def test_micro_perturbation_probability_stability():
+    """
+    Tiny Gaussian noise on numeric features → bounded max |Δp|.
+    ML integrity smoke only — not adversarial robustness certification.
+    """
+    rng = np.random.default_rng(11)
+    n = 500
+    data = {f"feature_{i}": rng.normal(0, 1, n) for i in range(4)}
+    data["target"] = (data["feature_0"] + 0.5 * data["feature_1"] + rng.normal(0, 0.3, n) > 0).astype(int)
+    data["id"] = np.arange(n)
+    df = pl.DataFrame(data)
+
+    with tempfile.TemporaryDirectory() as tmpdir, tempfile.TemporaryDirectory() as art_dir:
+        df.write_csv(Path(tmpdir) / "train.csv")
+        results = train_ebm_pipeline(
+            data_path=tmpdir,
+            target_col="target",
+            test_size=0.25,
+            random_seed=11,
+            hyperparameters={"max_rounds": 50, "interactions": 1, "outer_bags": 2},
+            artifacts_dir=art_dir,
+            write_legacy_copies=False,
+            perform_cv=False,
+            perform_adversarial=False,
+        )
+        base = pl.DataFrame(
+            {f"feature_{i}": rng.normal(0, 1, 40) for i in range(4)}
+        ).with_columns(pl.Series("id", range(40)))
+        eps = 1e-3
+        noisy = base.with_columns(
+            [(pl.col(c) + rng.normal(0, eps, 40)).alias(c) for c in [f"feature_{i}" for i in range(4)]]
+        )
+        p0 = predict_with_pipeline(results["model"], results["feature_engineer"], base)["probabilities"]
+        p1 = predict_with_pipeline(results["model"], results["feature_engineer"], noisy)["probabilities"]
+        max_delta = float(np.max(np.abs(p0 - p1)))
+        # Soft bound: micro-noise should not flip scores wildly on a smooth EBM surface.
+        assert max_delta < 0.15
+        # Rank stability of top half
+        top0 = set(np.argsort(-p0)[:20])
+        top1 = set(np.argsort(-p1)[:20])
+        assert len(top0 & top1) >= 12
+
+
+def test_covariate_shift_flags_drift_helper():
+    """
+    Train-like vs mean/variance-shifted frame → detect_data_drift alerts.
+    Wires to existing monitoring helper; not a claim of production detection SLA.
+    """
+    from src.monitoring.drift_monitoring import detect_data_drift
+
+    rng = np.random.default_rng(21)
+    n = 600
+    ref = pl.DataFrame(
+        {
+            "feature_0": rng.normal(0.0, 1.0, n),
+            "feature_1": rng.normal(1.0, 0.5, n),
+        }
+    )
+    shifted = pl.DataFrame(
+        {
+            "feature_0": rng.normal(1.5, 1.4, n),
+            "feature_1": rng.normal(1.0, 1.2, n),
+        }
+    )
+    result = detect_data_drift(ref, shifted, threshold=0.1)
+    assert result["drift_detected"] is True
+    assert result["feature_drifts"]["feature_0"]["drift_detected"] is True
+
+
+@pytest.mark.skipif(not INTERPRET_AVAILABLE, reason="interpret package not installed")
+def test_informative_feature_extreme_moves_score_expected_direction():
+    """
+    Extreme percentile / sign-style push on an informative feature should move
+    mean predicted probability in the expected direction (sanity).
+    Not FGSM / not adversarial robustness certification.
+    """
+    rng = np.random.default_rng(33)
+    n = 600
+    f0 = rng.normal(0, 1, n)
+    data = {
+        "feature_0": f0,
+        "feature_1": rng.normal(0, 1, n),
+        "feature_2": rng.normal(0, 1, n),
+        "target": (f0 + rng.normal(0, 0.25, n) > 0).astype(int),
+        "id": np.arange(n),
+    }
+    df = pl.DataFrame(data)
+
+    with tempfile.TemporaryDirectory() as tmpdir, tempfile.TemporaryDirectory() as art_dir:
+        df.write_csv(Path(tmpdir) / "train.csv")
+        results = train_ebm_pipeline(
+            data_path=tmpdir,
+            target_col="target",
+            test_size=0.25,
+            random_seed=33,
+            hyperparameters={"max_rounds": 60, "interactions": 0, "outer_bags": 2},
+            artifacts_dir=art_dir,
+            write_legacy_copies=False,
+            perform_cv=False,
+            perform_adversarial=False,
+        )
+        base = pl.DataFrame(
+            {
+                "feature_0": np.zeros(30),
+                "feature_1": rng.normal(0, 1, 30),
+                "feature_2": rng.normal(0, 1, 30),
+                "id": np.arange(30),
+            }
+        )
+        high = base.with_columns(pl.lit(3.0).alias("feature_0"))
+        low = base.with_columns(pl.lit(-3.0).alias("feature_0"))
+        p_high = predict_with_pipeline(results["model"], results["feature_engineer"], high)[
+            "probabilities"
+        ]
+        p_low = predict_with_pipeline(results["model"], results["feature_engineer"], low)[
+            "probabilities"
+        ]
+        assert float(np.mean(p_high)) > float(np.mean(p_low)) + 0.05

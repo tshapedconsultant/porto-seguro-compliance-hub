@@ -4,6 +4,8 @@ Part of Insurance Claim Prediction - Responsible AI Architecture
 """
 
 from pathlib import Path
+import hashlib
+import json
 import tempfile
 
 import numpy as np
@@ -12,7 +14,13 @@ import pytest
 
 # Skip if interpret is not installed
 try:
-    from src.models.ebm_train import train_ebm_pipeline, predict_with_pipeline
+    from src.models.ebm_train import (
+        build_dataset_provenance,
+        train_ebm_pipeline,
+        predict_with_pipeline,
+        write_run_manifest,
+        _canonical_manifest_body,
+    )
 
     INTERPRET_AVAILABLE = True
 except ImportError:
@@ -57,7 +65,29 @@ def test_full_ebm_pipeline_execution(synthetic_data_dir):
         assert "model" in results
         assert "feature_engineer" in results
         assert "metrics" in results
-        assert Path(results["paths"]["run_manifest"]).exists()
+        manifest_path = Path(results["paths"]["run_manifest"])
+        assert manifest_path.exists()
+        assert manifest_path.name.startswith("run_manifest_")
+        assert manifest_path.name.endswith(".json")
+        nested = Path(results["paths"]["run_manifest_nested"])
+        assert nested.exists()
+        pointer = Path(results["paths"]["run_manifest_latest"])
+        assert pointer.exists()
+        pointer_body = json.loads(pointer.read_text(encoding="utf-8"))
+        assert pointer_body["run_id"] == results["run_id"]
+        assert "non-authoritative" in pointer_body["note"].lower()
+
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        assert manifest["run_id"] == results["run_id"]
+        assert len(manifest["dataset"]["dataset_sha256"]) == 64
+        assert manifest["dataset"]["file_size_bytes"] > 0
+        assert manifest["dataset"]["row_count"] > 0
+        assert len(manifest["dataset"]["schema_sha256"]) == 64
+        expected_checksum = hashlib.sha256(
+            _canonical_manifest_body(manifest).encode("utf-8")
+        ).hexdigest()
+        assert manifest["manifest_sha256"] == expected_checksum
+        assert "NOT a cryptographic signature" in manifest["integrity_note"]
 
         metrics = results["metrics"]
         assert "test_auc" in metrics
@@ -78,3 +108,41 @@ def test_full_ebm_pipeline_execution(synthetic_data_dir):
         assert "probabilities" in inference_results
         assert len(inference_results["probabilities"]) == 10
         assert all(0.0 <= p <= 1.0 for p in inference_results["probabilities"])
+
+
+def test_dataset_provenance_synthetic_or_missing(tmp_path):
+    """No train.csv → synthetic_or_missing marker; no invented file SHA."""
+    df = pl.DataFrame({"a": [1, 2], "b": [0.1, 0.2], "target": [0, 1]})
+    prov = build_dataset_provenance(str(tmp_path), sample_size=2, random_seed=1, df=df)
+    assert prov["status"] == "synthetic_or_missing"
+    assert prov["dataset_sha256"] is None
+    assert prov["legacy_fingerprint"].startswith("synthetic_or_missing:")
+    assert prov["schema_sha256"]
+    assert "NOT" in prov["integrity_note"].upper() or "not" in prov["integrity_note"]
+
+
+def test_run_manifest_does_not_overwrite_shared_file(tmp_path):
+    """Two runs leave distinct manifest files; latest is pointer-only."""
+    p1 = write_run_manifest(
+        tmp_path,
+        run_id="runA",
+        dataset={"status": "synthetic_or_missing", "legacy_fingerprint": "x"},
+        config={},
+        metrics={"auc": 0.1},
+        artifact_paths={},
+    )
+    p2 = write_run_manifest(
+        tmp_path,
+        run_id="runB",
+        dataset={"status": "synthetic_or_missing", "legacy_fingerprint": "y"},
+        config={},
+        metrics={"auc": 0.2},
+        artifact_paths={},
+    )
+    assert p1 != p2
+    assert p1.exists() and p2.exists()
+    assert not (tmp_path / "run_manifest.json").exists()
+    latest = json.loads((tmp_path / "run_manifest_latest.json").read_text(encoding="utf-8"))
+    assert latest["run_id"] == "runB"
+    assert (tmp_path / "runA" / "run_manifest.json").exists()
+    assert (tmp_path / "runB" / "run_manifest.json").exists()

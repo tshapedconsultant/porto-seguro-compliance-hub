@@ -83,6 +83,11 @@ if __name__ == "__main__":
         print(f"   Model: {results['paths']['model']}")
         print(f"   Feature Engineer: {results['paths']['feature_engineer']}")
         print(f"   Run manifest: {results['paths'].get('run_manifest')}")
+        print(f"   Run id: {results.get('run_id')}")
+        print(
+            "   Note: run_manifest_latest.json is a non-authoritative pointer; "
+            "authoritative file is run_manifest_<run_id>.json"
+        )
 
     except ImportError as e:
         print(f"\n[ERROR] Missing dependency: {e}")

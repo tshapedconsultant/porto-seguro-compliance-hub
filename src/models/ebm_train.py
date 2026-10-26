@@ -57,34 +57,121 @@ def _package_version(name: str) -> Optional[str]:
         return None
 
 
-def _dataset_fingerprint(data_path: str, sample_size: Optional[int], random_seed: int) -> str:
-    """Pragmatic dataset marker — not cryptographic provenance."""
-    train_csv = Path(data_path) / "train.csv"
-    if train_csv.exists():
-        digest = hashlib.sha256()
-        with train_csv.open("rb") as fh:
-            for chunk in iter(lambda: fh.read(1024 * 1024), b""):
-                digest.update(chunk)
-        marker = digest.hexdigest()[:16]
-        return f"train.csv:{marker}:sample={sample_size}:seed={random_seed}"
-    return f"synthetic_or_missing:sample={sample_size}:seed={random_seed}"
+def _sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as fh:
+        for chunk in iter(lambda: fh.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _schema_hash(df: pl.DataFrame) -> str:
+    """Canonical hash of column names + dtypes (integrity checksum, not a signature)."""
+    schema_payload = [{"name": name, "dtype": str(dtype)} for name, dtype in df.schema.items()]
+    canonical = json.dumps(schema_payload, sort_keys=False, separators=(",", ":"))
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
+def build_dataset_provenance(
+    data_path: str,
+    sample_size: Optional[int],
+    random_seed: int,
+    df: Optional[pl.DataFrame] = None,
+    dataset_version: Optional[str] = None,
+) -> Dict[str, Any]:
+    """
+    Dataset integrity metadata for operational manifests.
+
+    When train.csv is present: full SHA-256, size, row count, schema hash, URI/path.
+    When absent: synthetic_or_missing marker (no invented file hash).
+    This is NOT cryptographic provenance, WORM storage, or legal evidence.
+    """
+    root = Path(data_path)
+    train_csv = root / "train.csv"
+    base: Dict[str, Any] = {
+        "sample_size": sample_size,
+        "random_seed": random_seed,
+        "dataset_uri": str(train_csv.resolve()) if train_csv.exists() else str(root.resolve()),
+        "dataset_version": dataset_version,
+        "integrity_note": (
+            "Integrity checksums only — not a cryptographic signature, "
+            "not WORM/legal provenance, not a conformity claim."
+        ),
+    }
+    if not train_csv.exists():
+        loaded = int(df.height) if df is not None else None
+        base.update(
+            {
+                "status": "synthetic_or_missing",
+                "dataset_sha256": None,
+                "file_size_bytes": None,
+                "row_count": loaded,
+                "loaded_row_count": loaded,
+                "schema_sha256": _schema_hash(df) if df is not None else None,
+                "legacy_fingerprint": f"synthetic_or_missing:sample={sample_size}:seed={random_seed}",
+            }
+        )
+        return base
+
+    file_sha = _sha256_file(train_csv)
+    # File row count (header excluded); loaded_row_count may be smaller when sampling.
+    with train_csv.open("rb") as fh:
+        file_row_count = max(sum(1 for _ in fh) - 1, 0)
+    loaded = int(df.height) if df is not None else None
+    schema = _schema_hash(df) if df is not None else None
+    base.update(
+        {
+            "status": "file_present",
+            "dataset_sha256": file_sha,
+            "file_size_bytes": int(train_csv.stat().st_size),
+            "row_count": file_row_count,
+            "loaded_row_count": loaded,
+            "schema_sha256": schema,
+            # Back-compat string for older consumers (full hash, not truncated).
+            "legacy_fingerprint": (
+                f"train.csv:{file_sha}:sample={sample_size}:seed={random_seed}"
+            ),
+        }
+    )
+    return base
+
+
+def _canonical_manifest_body(manifest: Dict[str, Any]) -> str:
+    """Deterministic JSON for integrity checksum (excludes manifest_sha256)."""
+    body = {k: v for k, v in manifest.items() if k != "manifest_sha256"}
+    return json.dumps(body, sort_keys=True, separators=(",", ":"), default=str)
 
 
 def write_run_manifest(
     artifacts_dir: Path,
     *,
     run_id: str,
-    dataset_hash: str,
+    dataset: Dict[str, Any],
     config: Dict[str, Any],
     metrics: Dict[str, Any],
     artifact_paths: Dict[str, Any],
 ) -> Path:
-    """Emit run_manifest.json (operational provenance MVP, not a trust attestation)."""
+    """
+    Emit per-run manifest (never overwrite a shared run_manifest.json).
+
+    Writes:
+      - artifacts_dir / run_id / run_manifest.json
+      - artifacts_dir / run_manifest_<run_id>.json
+      - artifacts_dir / run_manifest_latest.json  (non-authoritative pointer only)
+
+    manifest_sha256 is an integrity checksum of the canonical JSON body
+    (excluding that field). It is NOT a cryptographic signature.
+    """
+    run_dir = artifacts_dir / run_id
+    run_dir.mkdir(parents=True, exist_ok=True)
     artifacts_dir.mkdir(parents=True, exist_ok=True)
-    manifest = {
+
+    manifest: Dict[str, Any] = {
         "run_id": run_id,
         "created_at": datetime.now(timezone.utc).isoformat(),
-        "dataset_hash": dataset_hash,
+        "dataset": dataset,
+        # Convenience alias used by older docs/tests.
+        "dataset_hash": dataset.get("legacy_fingerprint") or dataset.get("dataset_sha256"),
         "config": config,
         "lib_versions": {
             "polars": _package_version("polars"),
@@ -96,12 +183,42 @@ def write_run_manifest(
         },
         "metrics": metrics,
         "artifact_paths": artifact_paths,
-        "note": "Operational run record only — not cryptographic provenance or regulatory certification.",
+        "note": (
+            "Operational run record only — not cryptographic provenance, "
+            "not a signature, not WORM/legal evidence, not regulatory certification."
+        ),
+        "integrity_note": (
+            "manifest_sha256 is an integrity checksum of the canonical JSON body "
+            "(sort_keys, excluding manifest_sha256). NOT a cryptographic signature "
+            "and NOT legal provenance unless an external signing key path is added."
+        ),
     }
-    path = artifacts_dir / "run_manifest.json"
-    path.write_text(json.dumps(manifest, indent=2, default=str), encoding="utf-8")
-    logger.info("   ✅ Saved run manifest: %s", path)
-    return path
+    manifest["manifest_sha256"] = hashlib.sha256(
+        _canonical_manifest_body(manifest).encode("utf-8")
+    ).hexdigest()
+
+    payload = json.dumps(manifest, indent=2, default=str)
+    path_nested = run_dir / "run_manifest.json"
+    path_flat = artifacts_dir / f"run_manifest_{run_id}.json"
+    path_nested.write_text(payload, encoding="utf-8")
+    path_flat.write_text(payload, encoding="utf-8")
+
+    pointer = {
+        "run_id": run_id,
+        "manifest_path": str(path_flat),
+        "manifest_nested_path": str(path_nested),
+        "created_at": manifest["created_at"],
+        "note": (
+            "Non-authoritative pointer to the latest run manifest for convenience "
+            "(e.g. API discovery). Authoritative record is run_manifest_<run_id>.json "
+            "or artifacts_dir/<run_id>/run_manifest.json."
+        ),
+    }
+    (artifacts_dir / "run_manifest_latest.json").write_text(
+        json.dumps(pointer, indent=2), encoding="utf-8"
+    )
+    logger.info("   ✅ Saved run manifest: %s (and %s)", path_flat, path_nested)
+    return path_flat
 
 
 def train_ebm_pipeline(
@@ -153,13 +270,15 @@ def train_ebm_pipeline(
     if write_legacy_copies is None:
         write_legacy_copies = out_dir.resolve() == DEFAULT_ARTIFACTS_DIR.resolve()
     run_id = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ") + "-" + uuid.uuid4().hex[:8]
-    dataset_hash = _dataset_fingerprint(data_path, sample_size, random_seed)
-    
+
     # --- 1. Data Loading (Polars) ---
     logger.info("🚀 Starting Pipeline...")
     logger.info("   Artifacts dir: %s", out_dir)
     df = load_porto_seguro_data(data_path, sample_size=sample_size, random_seed=random_seed)
     logger.info(f"📊 Loaded {len(df)} records with {len(df.columns)} features")
+    dataset_provenance = build_dataset_provenance(
+        data_path, sample_size, random_seed, df=df
+    )
     
     # --- 2. Stratified Split (Crucial for Imbalanced Data) ---
     logger.info("✂️  Splitting data (Stratified for imbalanced dataset)...")
@@ -393,7 +512,7 @@ def train_ebm_pipeline(
     manifest_path = write_run_manifest(
         out_dir,
         run_id=run_id,
-        dataset_hash=dataset_hash,
+        dataset=dataset_provenance,
         config={
             "data_path": str(data_path),
             "target_col": target_col,
@@ -407,6 +526,8 @@ def train_ebm_pipeline(
         artifact_paths=paths,
     )
     paths["run_manifest"] = str(manifest_path)
+    paths["run_manifest_nested"] = str(out_dir / run_id / "run_manifest.json")
+    paths["run_manifest_latest"] = str(out_dir / "run_manifest_latest.json")
 
     logger.info("✅ Pipeline completed successfully!")
 

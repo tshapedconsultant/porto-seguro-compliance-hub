@@ -41,4 +41,6 @@ if __name__ == "__main__":
     print(f"  Test Recall:   {m['test_recall']:.4f}")
     print(f"  Threshold:     {m['optimal_threshold']:.4f}")
     print(f"  Model:         {results['paths']['model']}")
+    print(f"  Run manifest:  {results['paths'].get('run_manifest')}")
+    print(f"  Run id:        {results.get('run_id')}")
     print(f"  Results:       {results_file}")

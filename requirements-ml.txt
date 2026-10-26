@@ -1,6 +1,11 @@
 # Conservative pins for optional ML CI / local synthetic EBM suites.
-# Not a full lockfile; regenerate with pip-tools/uv when tightening further.
-# Install: pip install -r requirements-ml.txt
+# Authoritative fully-pinned install: requirements-ml.lock
+# Regenerate (CI-targeted Linux 3.12):
+#   uv pip compile requirements-ml.txt -o requirements-ml.lock --python-platform linux --python-version 3.12
+# Fallback: pip-compile requirements-ml.txt -o requirements-ml.lock
+# Last resort: isolated venv + pip freeze (document platform; not bit-identical across OS).
+# CI / local locked: pip install -r requirements-ml.lock
+# Install loose: pip install -r requirements-ml.txt
 
 polars>=1.0,<2
 interpret>=0.4.0,<0.8

@@ -56,7 +56,7 @@ def format_drift_monitoring_section(
         monitoring_passed = overall == "healthy"
 
     return {
-        "status": "Compliant" if monitoring_passed else "Review Required",
+        "status": "evidence_available" if monitoring_passed else "review_required",
         "overall_status": overall,
         "monitoring_passed": bool(monitoring_passed),
         "evidence_file": str(evidence_path),
@@ -171,30 +171,33 @@ def generate_unified_ai_report(
             "local_explanations": "Available",
             "feature_interactions": "Available",
             "explainability_method": "Native EBM explainability with optional SHAP/LIME fallback",
-            "compliance_status": "Compliant",
+            "evidence_status": "evidence_available" if explainability_report else "not_assessed",
             "summary": explainability_report.get("compliance_notes", {}),
         },
         "solvency_ii_compliance": {
             "risk_management": "Model explainability enables risk assessment",
             "governance": "Model documentation and monitoring in place",
             "validation": "Model performance validated on test set",
-            "compliance_status": "Compliant",
+            "evidence_status": "review_required",
+            "compliance_status": "not_a_conformity_decision",
         },
         "eu_ai_act_compliance": {
-            "risk_category": "High-risk (insurance decision-making)",
+            "risk_category": "conditional — Annex III 5(c) is life/health, not all insurance",
             "transparency": "Native explainability provided",
             "human_oversight": "Model supports human-in-the-loop decisions",
             "accuracy_robustness": f"ROC-AUC: {performance_metrics.get('roc_auc', 0.0):.4f}",
-            "compliance_status": "Compliant",
+            "evidence_status": "conditional",
+            "compliance_status": "not_a_conformity_decision",
         },
         "responsible_ai_compliance": {
             "fairness": bias_audit_results or "Not Evaluated",
             "transparency": "Full explainability provided",
             "accountability": "Model decisions are traceable",
             "robustness": validation_results or "Not Evaluated",
-            "privacy": "No personal data in model features",
+            "privacy": "Demo Kaggle features are publisher-anonymised; not a Recital 26 legal finding",
             "drift_monitoring": format_drift_monitoring_section(drift_monitoring_results),
-            "compliance_status": "Compliant",
+            "evidence_status": "review_required",
+            "compliance_status": "not_a_conformity_decision",
         },
         "recommendations": [
             "Monitor model performance in production",

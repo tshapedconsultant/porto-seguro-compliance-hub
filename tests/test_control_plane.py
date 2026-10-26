@@ -178,9 +178,9 @@ def test_circuit_breaker(tmp_path):
 
     for _ in range(8):
         with pytest.raises(RuntimeError):
-            rt.execute_guarded("predict", boom, {})
+            rt.execute_guarded("predict_ebm", boom, {"tool": "predict_ebm"})
     with pytest.raises(RuntimeStopped):
-        rt.execute_guarded("predict", lambda: 1, {})
+        rt.execute_guarded("predict_ebm", lambda: 1, {"tool": "predict_ebm"})
     rt.reset_circuit("andre", "lab recovery")
     out = rt.execute_guarded("predict_ebm", lambda: 1, {"tool": "predict_ebm", "record_count": 1})
     assert out["status"] == "ok"
@@ -342,6 +342,70 @@ def test_motor_not_automatically_high_risk():
     )
     assert result["potential_high_risk"] is False
     assert result["is_legal_classification"] is False
+
+
+def test_unclassified_send_email_denied(tmp_path):
+    rt = _rt(tmp_path)
+    with pytest.raises(RuntimeBlocked) as exc:
+        rt.execute_guarded("send_email", lambda: "sent", {})
+    assert exc.value.decision["effect"] == "DENY"
+
+
+def test_approval_ticket_consumed(tmp_path):
+    rt = _rt(tmp_path)
+    payload = {"case": "underwriting"}
+    ticket = rt.approvals.request(action="score", requester="u", reason="x", payload=payload)
+    rt.approvals.decide(ticket["ticket_id"], reviewer="r", approve=True, rationale="ok")
+    ctx = {
+        "legal_effect_decision": True,
+        "approval_ticket_id": ticket["ticket_id"],
+        "approval_payload": payload,
+    }
+    assert rt.execute_guarded("score", lambda: 1, ctx)["status"] == "ok"
+    with pytest.raises(RuntimeBlocked):
+        rt.execute_guarded("score", lambda: 1, ctx)
+
+
+def test_nested_redaction(tmp_path):
+    rt = _rt(tmp_path)
+    out = rt.execute_guarded(
+        "predict_ebm",
+        lambda: {"customer": {"email": "person@example.com"}, "name": "Ada", "score": 1},
+        {"tool": "predict_ebm", "record_count": 1, "redact_output": True},
+    )
+    assert out["result"]["customer"]["email"] == "[REDACTED]"
+    assert out["result"]["name"] == "[REDACTED]"
+
+
+def test_redact_missing_required_field_denies(tmp_path):
+    rt = _rt(tmp_path)
+    with pytest.raises(RuntimeBlocked):
+        rt.execute_guarded(
+            "predict_ebm",
+            lambda: {"score": 0.1},
+            {"tool": "predict_ebm", "record_count": 1, "redact_output": True},
+        )
+
+
+def test_calendar_matches_versioned_fixture():
+    import json
+    from pathlib import Path
+
+    from src.control_plane.regulatory_library import APPLICATION_CALENDAR, MAPPINGS
+
+    fixture = json.loads(Path("tests/fixtures/ai_act_art113_oj_2024.json").read_text(encoding="utf-8"))
+    by_id = {m["id"]: m["date"] for m in APPLICATION_CALENDAR["milestones"]}
+    for key, expected in fixture["milestones"].items():
+        assert by_id[key] == expected
+    art72 = next(m for m in MAPPINGS if m["id"] == "AIA-72")
+    assert art72["application_milestone"] == "art72_post_market"
+    art5 = next(m for m in MAPPINGS if m["id"] == "AIA-5")
+    art5b = next(m for m in MAPPINGS if m["id"] == "AIA-5-amended")
+    assert art5["application_milestone"] == "prohibitions_and_literacy"
+    assert art5b["application_milestone"] == "art5_additional_prohibitions"
+    art50 = next(m for m in MAPPINGS if m["id"] == "AIA-50")
+    assert art50["application_milestone"] == "art50_transparency"
+    assert "date" in art50["applicability_rule"]
 
 
 def test_generated_policy_can_be_validated_and_stored(tmp_path):

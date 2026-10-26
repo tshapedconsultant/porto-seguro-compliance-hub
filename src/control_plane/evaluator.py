@@ -28,6 +28,19 @@ OPS = {
 
 ALLOWED_EFFECTS = set(PRECEDENCE)
 
+CLASSIFIED_INTERNAL_ACTIONS = frozenset({"predict_ebm", "explain_local", "drift_check"})
+EXTERNAL_EFFECT_ACTIONS = frozenset(
+    {
+        "export_external",
+        "delete",
+        "shell",
+        "write",
+        "send_email",
+        "upload_file",
+        "external_api_call",
+    }
+)
+
 
 def _match_clause(context: dict[str, Any], clause: dict[str, Any]) -> bool:
     field = clause.get("field")
@@ -73,9 +86,6 @@ def evaluate_policies(
 ) -> dict[str, Any]:
     """Deterministic evaluation. Mandatory DENY/STOP cannot be overridden by ALLOW."""
     try:
-        for policy in policies:
-            if policy.get("enabled", True):
-                validate_policy(policy)
         enabled = [p for p in policies if p.get("enabled", True)]
         enabled.sort(key=lambda p: int(p.get("priority", 100)))
         matched: list[dict[str, Any]] = []
@@ -93,21 +103,39 @@ def evaluate_policies(
             if matched:
                 winner = sorted(matched, key=lambda p: PRECEDENCE.index(p.get("effect", "ALLOW")))[0]
             else:
-                sensitive = (
-                    context.get("action") in {"export_external", "delete", "shell", "write"}
-                    or context.get("legal_effect_decision")
-                    or context.get("identifiable_personal_data")
-                    or context.get("art5_concern")
-                )
-                winner = {
-                    "policy_id": "default-deny-sensitive" if sensitive else "default-allow",
-                    "version": "0",
-                    "effect": "DENY" if sensitive else "ALLOW",
-                    "mandatory": bool(sensitive),
-                    "rationale": "Fail-closed: sensitive action with no matching policy"
-                    if sensitive
-                    else "No matching policy",
-                }
+                action = str(context.get("action") or "")
+                action_class = str(context.get("action_class") or "")
+                if not action and not action_class:
+                    winner = {
+                        "policy_id": "default-allow",
+                        "version": "0",
+                        "effect": "ALLOW",
+                        "mandatory": False,
+                        "rationale": "No matching policy",
+                    }
+                else:
+                    sensitive = (
+                        action in EXTERNAL_EFFECT_ACTIONS
+                        or action_class in {"external", "unclassified"}
+                        or context.get("legal_effect_decision")
+                        or context.get("identifiable_personal_data")
+                        or context.get("art5_concern")
+                        or context.get("side_effects") == "external_disclosure"
+                    )
+                    classified_internal = (
+                        action in CLASSIFIED_INTERNAL_ACTIONS
+                        and action_class in {"internal_inference", ""}
+                    )
+                    deny = sensitive or not classified_internal
+                    winner = {
+                        "policy_id": "default-deny-unclassified" if deny else "default-allow-classified",
+                        "version": "0",
+                        "effect": "DENY" if deny else "ALLOW",
+                        "mandatory": bool(deny),
+                        "rationale": "Fail-closed: unclassified or external action with no matching ALLOW policy"
+                        if deny
+                        else "Classified internal inference with no matching policy",
+                    }
 
         return {
             "effect": winner.get("effect", "ALLOW"),

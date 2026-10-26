@@ -385,7 +385,8 @@ def predict_with_pipeline(
 
     drop_cols = tuple(c for c in ("id", target_col) if c in new_data_eng.columns)
     probabilities = predict_proba_ebm(model, new_data_eng, drop_cols=drop_cols)
-    predictions = (probabilities >= 0.5).astype(int)
+    threshold = float(getattr(model, "optimal_threshold_", 0.5))
+    predictions = (probabilities >= threshold).astype(int)
     
     logger.info(f"Generated predictions for {len(predictions)} records")
     

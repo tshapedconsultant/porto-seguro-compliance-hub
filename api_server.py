@@ -10,6 +10,7 @@ import json
 import logging
 import math
 import os
+import secrets
 import threading
 import time
 from datetime import datetime
@@ -23,6 +24,8 @@ from fastapi import BackgroundTasks, FastAPI, Header, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
+from src.control_plane.approvals import ApprovalError
+from src.control_plane.binding import canonical_json
 from src.control_plane.runtime import RuntimeBlocked, RuntimeStopped, get_runtime
 from src.models.interpret_bridge import predict_proba_ebm
 
@@ -35,6 +38,8 @@ MAX_FEATURES_PER_REQUEST = int(os.getenv("MAX_FEATURES_PER_REQUEST", "200"))
 AUDIT_LOG_PATH = Path(os.getenv("AUDIT_LOG_PATH", "logs/prediction_audit.jsonl"))
 UNCERTAINTY_MARGIN = float(os.getenv("UNCERTAINTY_MARGIN", "0.05"))
 REQUIRE_ARTIFACT_HASH = os.getenv("REQUIRE_ARTIFACT_HASH", "false").lower() in ("1", "true", "yes")
+MAX_BATCH_RECORDS = int(os.getenv("MAX_BATCH_RECORDS", "1000"))
+TRUST_PROXY = os.getenv("TRUST_PROXY", "false").lower() in ("1", "true", "yes")
 
 app = FastAPI(
     title="Insurance Claim Prediction API",
@@ -49,8 +54,8 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=allowed_origins,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_headers=["Content-Type", "Authorization", "X-API-Key", "X-Approval-Ticket"],
 )
 
 model = None
@@ -108,16 +113,35 @@ def _verify_file_hash(path: Path, env_var_name: str) -> None:
     logger.info("SHA-256 verified for %s", path.name)
 
 
+def _client_ip(request: Request) -> str:
+    if TRUST_PROXY:
+        forwarded = request.headers.get("X-Forwarded-For", "")
+        if forwarded:
+            return forwarded.split(",")[0].strip() or "unknown"
+    return request.client.host if request.client else "unknown"
+
+
 def _enforce_security(request: Request, x_api_key: Optional[str]) -> None:
-    if API_KEY and x_api_key != API_KEY:
-        raise HTTPException(status_code=401, detail="Invalid or missing API key.")
+    if API_KEY:
+        provided = x_api_key or ""
+        try:
+            ok = secrets.compare_digest(provided, API_KEY)
+        except (TypeError, ValueError):
+            ok = False
+        if not ok:
+            raise HTTPException(status_code=401, detail="Invalid or missing API key.")
 
-    if len(rate_limit_bucket) > 10000:
-        rate_limit_bucket.clear()
-
-    client_ip = request.client.host if request.client else "unknown"
     now = time.time()
     window_start = now - 60
+    stale = [ip for ip, stamps in rate_limit_bucket.items() if not any(ts > window_start for ts in stamps)]
+    for ip in stale[:500]:
+        rate_limit_bucket.pop(ip, None)
+    if len(rate_limit_bucket) > 10000:
+        oldest = sorted(rate_limit_bucket, key=lambda k: min(rate_limit_bucket[k] or [now]))[:1000]
+        for ip in oldest:
+            rate_limit_bucket.pop(ip, None)
+
+    client_ip = _client_ip(request)
     history = [ts for ts in rate_limit_bucket.get(client_ip, []) if ts > window_start]
     if len(history) >= RATE_LIMIT_PER_MINUTE:
         raise HTTPException(status_code=429, detail="Rate limit exceeded. Try again later.")
@@ -181,8 +205,24 @@ def _schedule_audit(background_tasks: BackgroundTasks, event: Dict[str, Any]) ->
 
 
 def _require_api_key(x_api_key: Optional[str]) -> None:
-    if API_KEY and x_api_key != API_KEY:
+    _enforce_security_key_only(x_api_key)
+
+
+def _enforce_security_key_only(x_api_key: Optional[str]) -> None:
+    if not API_KEY:
+        return
+    provided = x_api_key or ""
+    try:
+        ok = secrets.compare_digest(provided, API_KEY)
+    except (TypeError, ValueError):
+        ok = False
+    if not ok:
         raise HTTPException(status_code=401, detail="Invalid or missing API key.")
+
+
+def _features_binding(normalized: Dict[str, Any]) -> Dict[str, Any]:
+    digest = hashlib.sha256(canonical_json(normalized).encode("utf-8")).hexdigest()
+    return {"normalized_features_sha256": digest, "feature_count": len(normalized)}
 
 
 def _features_for_inference(df_transformed: pl.DataFrame) -> pl.DataFrame:
@@ -192,10 +232,13 @@ def _features_for_inference(df_transformed: pl.DataFrame) -> pl.DataFrame:
 
 @app.middleware("http")
 async def attach_request_id(request: Request, call_next):
-    request_id = request.headers.get("X-Request-ID", str(uuid4()))
+    request_id = str(uuid4())
     request.state.request_id = request_id
+    request.state.client_request_id = request.headers.get("X-Request-ID")
     response = await call_next(request)
     response.headers["X-Request-ID"] = request_id
+    if request.state.client_request_id:
+        response.headers["X-Client-Request-ID"] = request.state.client_request_id
     return response
 
 
@@ -232,7 +275,8 @@ def load_model() -> None:
         logger.info("Model and feature engineer loaded successfully")
     except Exception as exc:
         logger.error("Error loading model: %s", exc)
-        raise
+        model = None
+        feature_engineer = None
 
 
 class PredictionRequest(BaseModel):
@@ -243,7 +287,25 @@ class PredictionRequest(BaseModel):
 
 
 class BatchPredictionRequest(BaseModel):
-    records: List[Dict[str, Any]]
+    records: List[Dict[str, Any]] = Field(default_factory=list)
+
+    class Config:
+        extra = "forbid"
+
+
+class ApprovalRequestBody(BaseModel):
+    action: str = "predict_ebm"
+    reason: str
+    requester: str = "api-client"
+    payload: Dict[str, Any] = Field(default_factory=dict)
+    tool: str = "predict_ebm"
+    ttl_seconds: int = 3600
+
+
+class ApprovalDecisionBody(BaseModel):
+    reviewer: str
+    approve: bool
+    rationale: str
 
 
 class PredictionResponse(BaseModel):
@@ -279,6 +341,45 @@ def root() -> Dict[str, Any]:
     }
 
 
+@app.post("/approvals/request", tags=["Approvals"])
+def request_approval(
+    body: ApprovalRequestBody,
+    http_request: Request,
+    x_api_key: Optional[str] = Header(default=None),
+) -> Dict[str, Any]:
+    _enforce_security(http_request, x_api_key)
+    ticket = get_runtime().approvals.request(
+        action=body.action,
+        requester=body.requester,
+        reason=body.reason,
+        payload=body.payload,
+        tool=body.tool,
+        ttl_seconds=body.ttl_seconds,
+        execution_id="",
+    )
+    ticket["authn_note"] = "reviewer/requester strings are not SSO identities"
+    return ticket
+
+
+@app.post("/approvals/{ticket_id}/decide", tags=["Approvals"])
+def decide_approval(
+    ticket_id: str,
+    body: ApprovalDecisionBody,
+    http_request: Request,
+    x_api_key: Optional[str] = Header(default=None),
+) -> Dict[str, Any]:
+    _enforce_security(http_request, x_api_key)
+    try:
+        return get_runtime().approvals.decide(
+            ticket_id,
+            reviewer=body.reviewer,
+            approve=body.approve,
+            rationale=body.rationale,
+        )
+    except ApprovalError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
 @app.get("/health", response_model=HealthResponse, tags=["General"])
 def health_check() -> Dict[str, Any]:
     return {
@@ -302,7 +403,7 @@ def predict(
     try:
         _enforce_security(http_request, x_api_key)
         input_data = _normalize_features(request.features)
-        legal_effect = http_request.headers.get("X-Legal-Effect", "").lower() in ("1", "true", "yes")
+        legal_effect = bool(get_runtime().flow_legal_effect)
 
         def _infer(ctx: Dict[str, Any]) -> Dict[str, Any]:
             rows = ctx.get("records") or [input_data]
@@ -333,10 +434,10 @@ def predict(
                 "action": "predict_ebm",
                 "record_count": 1,
                 "records": [input_data],
-                "execution_id": request_id,
+                "execution_id": "",
                 "legal_effect_decision": legal_effect,
                 "approval_ticket_id": http_request.headers.get("X-Approval-Ticket"),
-                "approval_payload": {"feature_count": len(request.features)},
+                "approval_payload": _features_binding(input_data),
                 "estimated_cost_eur": 0.0,
             },
         )
@@ -382,6 +483,11 @@ def batch_predict(
         _enforce_security(http_request, x_api_key)
         if not request.records:
             raise HTTPException(status_code=422, detail="Batch payload must include at least one record.")
+        if len(request.records) > MAX_BATCH_RECORDS:
+            raise HTTPException(
+                status_code=413,
+                detail=f"Batch exceeds hard limit of {MAX_BATCH_RECORDS} records.",
+            )
 
         normalized_records = []
         for idx, record in enumerate(request.records):
@@ -432,6 +538,8 @@ def batch_predict(
                 "record_count": len(normalized_records),
                 "records": normalized_records,
                 "execution_id": request_id,
+                "legal_effect_decision": bool(get_runtime().flow_legal_effect),
+                "approval_ticket_id": http_request.headers.get("X-Approval-Ticket"),
                 "estimated_cost_eur": 0.0,
             },
         )

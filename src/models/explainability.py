@@ -115,7 +115,8 @@ def explain_ebm_local(
     default_return = {
         "local_explanations": [],
         "explanation_object": None,
-        "error": None
+        "error": None,
+        "explanation_status": "unavailable",
     }
     
     try:
@@ -178,70 +179,18 @@ def explain_ebm_local(
             except Exception as e:
                 logger.warning(f"Method 2 (internal) failed: {e}")
         
-        # METHOD 3: Use model.predict_proba and feature contributions manually
-        if not local_data:
-            try:
-                logger.info("Using METHOD 3: Manual feature contribution calculation")
-                # Get predictions
-                predictions = model.predict_proba(X_sample)
-                
-                # Get feature names
-                feature_names = X_sample.columns.tolist()
-                
-                # For each sample, calculate approximate contributions
-                # This is a fallback method when explain_local doesn't work
-                for idx in range(len(X_sample)):
-                    sample_row = X_sample.iloc[[idx]]
-                    sample_dict = {}
-                    
-                    # Get base prediction
-                    base_pred = model.predict_proba(sample_row)[0][1]
-                    
-                    # Calculate approximate feature contributions
-                    # This is a simplified version - EBM has more complex interactions
-                    for feat in feature_names[:10]:  # Limit to top 10 for performance
-                        try:
-                            # Get feature value
-                            feat_val = sample_row[feat].iloc[0]
-                            
-                            # Approximate contribution (simplified)
-                            # In real EBM, this would use the actual additive model structure
-                            sample_dict[str(feat)] = float(feat_val) * 0.01  # Placeholder contribution
-                        except:
-                            continue
-                    
-                    if sample_dict:
-                        local_data.append(sample_dict)
-                        
-            except Exception as e:
-                logger.warning(f"Method 3 (manual) failed: {e}")
-        
-        # If we have data, return it; otherwise return default with error
         if local_data:
             return {
                 "local_explanations": local_data,
                 "explanation_object": local_explanation,
-                "error": None
+                "error": None,
+                "explanation_status": "native",
             }
-        else:
-            logger.warning("All methods failed to extract local explanation data")
-            # Return a fallback with sample data structure
-            # Generate placeholder based on feature names
-            try:
-                feature_names = X_sample.columns.tolist()[:5]
-                fallback_data = [{
-                    str(feat): 0.0 for feat in feature_names
-                }]
-                return {
-                    "local_explanations": fallback_data,
-                    "explanation_object": local_explanation,
-                    "error": "Using fallback format - EBM explain_local data() returned None",
-                    "warning": "This is a simplified representation. Full EBM explanations require model.explain_local().data() to work."
-                }
-            except:
-                default_return["error"] = "Could not extract local explanations - EBM explain_local format not supported"
-                default_return["explanation_object"] = local_explanation
-                return default_return
+        logger.warning("Native local explanation data unavailable; refusing fabricated contributions")
+        default_return["error"] = "Native EBM explain_local data unavailable"
+        default_return["explanation_status"] = "unavailable"
+        default_return["explanation_object"] = local_explanation
+        return default_return
             
     except Exception as e:
         logger.error(f"Error generating local explanation: {e}")
@@ -271,9 +220,15 @@ def explain_ebm_interactions(model: ExplainableBoostingClassifier) -> Dict:
                 # This indicates feature interactions
                 interactions[str(item['names'])] = item.get('scores', [])
     
+    term_names = getattr(model, "term_names_", None) or getattr(model, "feature_names", None)
+    has_pairs = False
+    if term_names:
+        has_pairs = any("&" in str(n) or " x " in str(n).lower() for n in term_names)
     return {
         "interactions": interactions,
-        "explanation_object": interaction_explanation
+        "interaction_coverage_confirmed": bool(interactions) or has_pairs,
+        "explanation_object": interaction_explanation,
+        "note": "Global explain() is not proof of pairwise interactions unless term structure confirms them.",
     }
 
 

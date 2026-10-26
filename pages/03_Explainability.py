@@ -82,10 +82,15 @@ if model_loaded and data_loaded and X_sample is not None:
             st.error(f"Unrecognized explanation format. Type received: {type(local_exp)}")
 
         if top_features:
-            sample_explanation = pd.DataFrame(
-                {"Feature": [f[0] for f in top_features], "Contribution": [f[1] for f in top_features]}
-            )
-            st.success("✅ Using REAL local explanations from the loaded model.")
+            status = local_exp.get("explanation_status") if isinstance(local_exp, dict) else "native"
+            if status != "native":
+                st.warning("Explicación local no nativa o no disponible; no se muestran contribuciones fabricadas.")
+                top_features = []
+            else:
+                sample_explanation = pd.DataFrame(
+                    {"Feature": [f[0] for f in top_features], "Contribution": [f[1] for f in top_features]}
+                )
+                st.success("Using native local explanations from the loaded model.")
         elif sample_explanation is None:
             st.warning("No numeric feature contributions found for this record.")
 

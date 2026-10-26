@@ -122,7 +122,7 @@ DEFAULT_POLICIES = [
         "obligation_type": "internal_rule",
         "rationale": "Redact named output fields when requested. Empty redact_fields is invalid.",
         "conditions": {"all": [{"field": "redact_output", "op": "eq", "value": True}]},
-        "parameters": {"redact_fields": ["email", "name", "client_ip"]},
+        "parameters": {"redact_fields": ["email", "name"]},
         "test_scenarios": ["redact_output true"],
     },
 ]

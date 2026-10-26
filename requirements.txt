@@ -40,6 +40,10 @@ scipy>=1.11.0  # For statistical tests (bias audit, drift detection - Kolmogorov
 # Model persistence
 joblib>=1.3.0  # Better than pickle for sklearn models
 
+# API (see also requirements_api.txt)
+fastapi>=0.110.0
+uvicorn>=0.27.0
+
 # Documentation
 mkdocs>=1.5.0
 mkdocs-material>=9.2.0

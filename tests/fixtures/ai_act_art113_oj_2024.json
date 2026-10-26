@@ -1,0 +1,18 @@
+{
+  "instrument": "Regulation (EU) 2024/1689 as amended by Regulation (EU) 2026/1744",
+  "celex": "32024R1689",
+  "source_oj": "https://eur-lex.europa.eu/eli/reg/2024/1689/oj",
+  "amendment": "https://eur-lex.europa.eu/eli/reg/2026/1744/oj",
+  "article": "113",
+  "note": "Encoded from the Commission/consolidated calendar used in this repo. encoded_at is not a live EUR-Lex fetch.",
+  "milestones": {
+    "prohibitions_and_literacy": "2025-02-02",
+    "gpai": "2025-08-02",
+    "general_application": "2026-08-02",
+    "art5_additional_prohibitions": "2026-12-02",
+    "high_risk_annex_iii": "2027-12-02",
+    "high_risk_annex_i": "2028-08-02",
+    "art50_transparency": "2026-08-02",
+    "art72_post_market": "2026-08-02"
+  }
+}

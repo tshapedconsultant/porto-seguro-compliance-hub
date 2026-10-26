@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from src.governance.dpia_workspace.models import Assessment, empty_processing, utc_now
+from src.governance.dpia_workspace.proportionality import assess_proportionality
 from src.governance.dpia_workspace.risk_engine import score_risk
 from src.governance.dpia_workspace.screening import screen_necessity
 
@@ -61,6 +62,10 @@ def demo_assessment() -> Assessment:
         "q_third_party_model": False,
     }
     screening = screen_necessity(answers, processing, author="seed")
+    proportionality = assess_proportionality(
+        processing,
+        {"art22_safeguards": "Human reviewer before any underwriting analogue in this demo"},
+    )
     risk = score_risk(
         likelihood=4,
         severity=4,
@@ -77,7 +82,19 @@ def demo_assessment() -> Assessment:
         decision_state="pending_review",
         processing=processing,
         screening=screening,
+        proportionality=proportionality,
         risks=[risk],
+        controls=[
+            {
+                "control_id": "CTL-hitl",
+                "status": "verified_in_target",
+                "verification_state": "verified",
+                "addresses_risks": [risk["risk_id"]],
+                "reduction_justification": "Demo routes scores to a human reviewer; no auto-issue of policies.",
+                "affects_dimension": "severity",
+                "reduction_magnitude": 1,
+            }
+        ],
         evidence=[
             {
                 "evidence_id": "EVD-static-dpia",

@@ -176,7 +176,7 @@ def calculate_business_metrics(
     premium: float = 1000.0,
 ) -> Dict:
     """
-    Calculate business metrics for insurance claim prediction.
+    Illustrative cost model only — not an actuarial or pricing result.
 
     Args:
         y_true: True labels
@@ -194,6 +194,7 @@ def calculate_business_metrics(
     net_profit = total_revenue - total_cost
 
     return {
+        "illustrative_only": True,
         "true_positives": int(tp),
         "true_negatives": int(tn),
         "false_positives": int(fp),

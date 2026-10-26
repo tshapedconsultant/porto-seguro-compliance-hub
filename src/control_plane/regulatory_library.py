@@ -1,9 +1,9 @@
 """
 Versioned EU AI Act / GDPR applicability rules.
 
-Application dates follow Art. 113 of Regulation (EU) 2024/1689 as amended in the
-EUR-Lex consolidated text dated 2026-07-27 (review of 2026-10-25). Re-verify on EUR-Lex
-before relying on a date. Annex III high-risk duties are NOT 2026-08-02.
+Application dates follow Art. 113 of Regulation (EU) 2024/1689 as amended by
+Regulation (EU) 2026/1744 (Commission calendar). Fixture:
+tests/fixtures/ai_act_art113_oj_2024.json. encoded_at is not a live EUR-Lex fetch.
 """
 
 from __future__ import annotations
@@ -15,20 +15,24 @@ SOURCE_VERIFIED_AT = "2026-10-25"
 AI_ACT_CELEX = "https://eur-lex.europa.eu/eli/reg/2024/1689/oj"
 
 APPLICATION_CALENDAR = {
-    "version": "2024/1689-calendar-v2-art113-consolidated-2026-07-27",
+    "version": "2024/1689-art113-amended-2026-1744-v4",
     "source": "https://eur-lex.europa.eu/eli/reg/2024/1689/2026-07-27/eng",
     "source_oj": AI_ACT_CELEX,
-    "consolidated_text_date": "2026-07-27",
+    "amendment": "https://eur-lex.europa.eu/eli/reg/2026/1744/oj",
+    "source_celex": "32024R1689",
+    "fixture": "tests/fixtures/ai_act_art113_oj_2024.json",
     "encoded_at": SOURCE_VERIFIED_AT,
-    "note": "encoded_at is when this file was written, not proof the dates are correct.",
+    "note": "Commission/consolidated Art. 113 after 2026/1744. encoded_at is not live verification.",
     "milestones": [
         {"id": "entry_into_force", "date": "2024-08-01", "refs": ["Art. 113"]},
-        {"id": "prohibitions_and_literacy", "date": "2025-02-02", "refs": ["Art. 5 (original set)", "Art. 4", "Art. 113"]},
-        {"id": "gpai", "date": "2025-08-02", "refs": ["GPAI chapter", "Art. 113"]},
+        {"id": "prohibitions_and_literacy", "date": "2025-02-02", "refs": ["Art. 113: Arts 4 and 5 original set"]},
+        {"id": "gpai", "date": "2025-08-02", "refs": ["Art. 113: Chapter V"]},
         {"id": "general_application", "date": "2026-08-02", "refs": ["Art. 113 general application"]},
-        {"id": "art5_additional_prohibitions", "date": "2026-12-02", "refs": ["Art. 5 additional / Art. 113"]},
-        {"id": "high_risk_annex_iii", "date": "2027-12-02", "refs": ["Annex III duties / Art. 113 as amended"]},
-        {"id": "high_risk_annex_i", "date": "2028-08-02", "refs": ["Annex I high-risk / Art. 113"]},
+        {"id": "art5_additional_prohibitions", "date": "2026-12-02", "refs": ["Art. 5 additional set / Art. 113 as amended"]},
+        {"id": "art50_transparency", "date": "2026-08-02", "refs": ["Art. 50; default general application unless a later delay is encoded"]},
+        {"id": "art72_post_market", "date": "2026-08-02", "refs": ["Art. 72 Chapter IX; not the Annex III delay"]},
+        {"id": "high_risk_annex_iii", "date": "2027-12-02", "refs": ["Annex III high-risk duties / Art. 113 as amended"]},
+        {"id": "high_risk_annex_i", "date": "2028-08-02", "refs": ["Annex I / Art. 6(1) delayed application"]},
     ],
 }
 
@@ -42,6 +46,30 @@ MAPPINGS = [
         "conditions": "Use matches an Art. 5 prohibition after applying definitions and exceptions.",
         "applicability_status": "conditional",
         "application_milestone": "prohibitions_and_literacy",
+        "applicability_rule": {
+            "milestone": "prohibitions_and_literacy",
+            "date": "2025-02-02",
+            "covers": "original Art. 5 set in force from 2 February 2025",
+        },
+        "source": AI_ACT_CELEX,
+        "verified_at": SOURCE_VERIFIED_AT,
+        "automation": "screening flag + DENY pending legal review",
+        "human_review": True,
+    },
+    {
+        "id": "AIA-5-amended",
+        "instrument": "EU AI Act",
+        "article": "5",
+        "summary": "Additional prohibited practices introduced by later amendment — not the original Feb 2025 set.",
+        "actor": "any operator placing/using a prohibited practice",
+        "conditions": "Use matches an Art. 5 prohibition added after the original set.",
+        "applicability_status": "conditional",
+        "application_milestone": "art5_additional_prohibitions",
+        "applicability_rule": {
+            "milestone": "art5_additional_prohibitions",
+            "date": "2026-12-02",
+            "covers": "additional Art. 5 prohibitions",
+        },
         "source": AI_ACT_CELEX,
         "verified_at": SOURCE_VERIFIED_AT,
         "automation": "screening flag + DENY pending legal review",
@@ -167,7 +195,12 @@ MAPPINGS = [
         "actor": "depends on system type (e.g. chatbot, deepfake — see article)",
         "conditions": "System falls within Art. 50 categories.",
         "applicability_status": "conditional",
-        "application_milestone": "see Art. 113 / Art. 50",
+        "application_milestone": "art50_transparency",
+        "applicability_rule": {
+            "milestone": "art50_transparency",
+            "date": "2026-08-02",
+            "conditions": ["system falls within an Art. 50 category"],
+        },
         "source": AI_ACT_CELEX,
         "verified_at": SOURCE_VERIFIED_AT,
         "automation": "not assumed for tabular EBM scoring",
@@ -181,7 +214,7 @@ MAPPINGS = [
         "actor": "provider (high-risk)",
         "conditions": "High-risk provider role.",
         "applicability_status": "conditional",
-        "application_milestone": "high_risk_annex_iii",
+        "application_milestone": "art72_post_market",
         "source": AI_ACT_CELEX,
         "verified_at": SOURCE_VERIFIED_AT,
         "automation": "drift / production compliance gate",

@@ -22,24 +22,63 @@ SAFE_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{1,62}$")
 
 def _content_fingerprint(assessment: Assessment) -> str:
     body = assessment.to_dict()
-    for skip in ("modified_at", "version", "reviews", "approved_content_hash", "approved_version"):
+    for skip in (
+        "modified_at",
+        "version",
+        "reviews",
+        "approved_content_hash",
+        "approved_version",
+        "decision_state",
+        "legal_uncertainty",
+        "lifecycle_state",
+    ):
         body.pop(skip, None)
     blob = json.dumps(body, sort_keys=True, separators=(",", ":"), default=str)
     return hashlib.sha256(blob.encode("utf-8")).hexdigest()
 
 
+def _nonempty(value: Any) -> bool:
+    if value is None:
+        return False
+    if isinstance(value, str):
+        return bool(value.strip())
+    if isinstance(value, (list, dict)):
+        return bool(value)
+    return True
+
+
 def approval_eligible(assessment: Assessment) -> tuple[bool, list[str]]:
-    """AEPD-style minimum: description, necessity/proportionality, risks, measures. Not a legal clearance."""
+    """Content checks for an internal demo approval. Not a legal clearance."""
     gaps: list[str] = []
     missing, contradictions = validate_processing(assessment.processing)
     gaps.extend(missing)
     gaps.extend(contradictions)
     if not assessment.screening.get("outcome"):
         gaps.append("screening.outcome")
-    if not assessment.proportionality:
+    if not assessment.screening.get("scope"):
+        gaps.append("screening.scope")
+    prop = assessment.proportionality or {}
+    if not prop.get("findings") and not prop.get("necessity_summary"):
         gaps.append("necessity_and_proportionality")
+    if prop.get("blocking_lawfulness_or_necessity"):
+        gaps.append("proportionality_blocking")
     if not assessment.risks:
         gaps.append("risk_register")
+    for idx, risk in enumerate(assessment.risks or []):
+        for key in ("threat_scenario", "potential_harm", "likelihood", "severity"):
+            if not _nonempty(risk.get(key)):
+                gaps.append(f"risks[{idx}].{key}")
+    implemented = [
+        c
+        for c in assessment.controls or []
+        if c.get("status") in {"implemented_unverified", "tested", "verified_in_target"}
+        and _nonempty(c.get("reduction_justification") or c.get("justification"))
+        and c.get("addresses_risks")
+    ]
+    if not implemented:
+        gaps.append("implemented_controls_with_justification")
+    if not any(_nonempty((e or {}).get("description")) for e in assessment.evidence or []):
+        gaps.append("linked_evidence")
     proc = assessment.processing or {}
     if proc.get("data_status") == "identifiable" and not proc.get("legal_bases"):
         gaps.append("legal_bases_per_purpose")
@@ -85,7 +124,7 @@ class AssessmentStore:
         ok, gaps = approval_eligible(assessment)
         fingerprint = _content_fingerprint(assessment)
         if assessment.decision_state == "approved_internally":
-            prior = assessment.to_dict().get("approved_content_hash")
+            prior = assessment.approved_content_hash
             if not ok:
                 assessment.decision_state = "incomplete"
                 assessment.legal_uncertainty.append("Approval blocked: " + "; ".join(gaps))
@@ -167,10 +206,8 @@ class AssessmentStore:
             assessment.decision_state = decision
             if decision == "approved_internally":
                 assessment.lifecycle_state = "decision"
-                data = assessment.to_dict()
-                data["approved_content_hash"] = _content_fingerprint(assessment)
-                data["approved_version"] = assessment.version
-                assessment = Assessment.from_dict(data)
+                assessment.approved_content_hash = _content_fingerprint(assessment)
+                assessment.approved_version = assessment.version
             elif decision in {"rejected", "requires_additional_mitigation", "art36_consultation_flagged", "incomplete"}:
                 if decision != "incomplete":
                     assessment.lifecycle_state = "decision"

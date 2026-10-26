@@ -63,6 +63,8 @@ class Assessment:
     assumptions: list[str] = field(default_factory=list)
     legal_uncertainty: list[str] = field(default_factory=list)
     generated_proposals_only: bool = True
+    approved_content_hash: str | None = None
+    approved_version: int | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)

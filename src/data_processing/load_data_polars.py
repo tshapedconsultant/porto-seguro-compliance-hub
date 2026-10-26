@@ -54,7 +54,10 @@ def load_porto_seguro_data(
         low_memory=False
     )
     # Porto Seguro uses -1 as missing; convert to real Polars nulls before FE/modeling
-    df = df.with_columns(pl.all().replace(-1, None))
+    skip = {"id", "target"}
+    value_cols = [c for c in df.columns if c not in skip]
+    if value_cols:
+        df = df.with_columns([pl.col(c).replace(-1, None) for c in value_cols])
 
     logger.info(f"Loaded {len(df)} records with {len(df.columns)} features")
     

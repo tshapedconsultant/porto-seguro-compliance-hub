@@ -20,7 +20,15 @@ class ControlPlaneStore:
             )
 
     def load_policies(self) -> list[dict[str, Any]]:
-        return json.loads(self.policy_path.read_text(encoding="utf-8")).get("policies", [])
+        if not self.policy_path.exists():
+            raise FileNotFoundError(str(self.policy_path))
+        payload = json.loads(self.policy_path.read_text(encoding="utf-8"))
+        policies = payload.get("policies")
+        if not isinstance(policies, list) or not policies:
+            raise ValueError("policies.json has no policies")
+        for policy in policies:
+            validate_policy(policy)
+        return policies
 
     def save_policies(self, policies: list[dict[str, Any]]) -> None:
         for policy in policies:

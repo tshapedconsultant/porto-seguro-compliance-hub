@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import threading
 from pathlib import Path
 from typing import Any
 
@@ -23,6 +24,7 @@ class AuditLog:
     def __init__(self, path: Path | None = None) -> None:
         self.path = Path(path or "docs/governance/control_plane_audit.jsonl")
         self.path.parent.mkdir(parents=True, exist_ok=True)
+        self._lock = threading.Lock()
         self._prev = self._load_tail_hash()
 
     def _load_tail_hash(self) -> str:
@@ -32,20 +34,21 @@ class AuditLog:
         return rows[-1].get("event_hash") or GENESIS
 
     def append(self, event: dict[str, Any]) -> dict[str, Any]:
-        record = {
-            "event_id": new_id("EVT"),
-            "timestamp": utc_now(),
-            **event,
-        }
-        previous = self._prev
-        body = {k: v for k, v in record.items() if k not in {"event_hash", "previous_event_hash", "integrity_sha256"}}
-        digest = hashlib.sha256((_canonical(body) + previous).encode("utf-8")).hexdigest()
-        record["previous_event_hash"] = previous
-        record["event_hash"] = digest
-        with self.path.open("a", encoding="utf-8") as handle:
-            handle.write(json.dumps(record, ensure_ascii=False) + "\n")
-        self._prev = digest
-        return record
+        with self._lock:
+            record = {
+                "event_id": new_id("EVT"),
+                "timestamp": utc_now(),
+                **event,
+            }
+            previous = self._prev
+            body = {k: v for k, v in record.items() if k not in {"event_hash", "previous_event_hash", "integrity_sha256"}}
+            digest = hashlib.sha256((_canonical(body) + previous).encode("utf-8")).hexdigest()
+            record["previous_event_hash"] = previous
+            record["event_hash"] = digest
+            with self.path.open("a", encoding="utf-8") as handle:
+                handle.write(json.dumps(record, ensure_ascii=False) + "\n")
+            self._prev = digest
+            return record
 
     def read_all(self) -> list[dict[str, Any]]:
         if not self.path.exists():

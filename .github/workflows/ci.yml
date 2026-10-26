@@ -14,8 +14,10 @@ jobs:
         with:
           python-version: "3.12"
       - name: Install test extras
-        run: pip install pytest pandas numpy
+        run: |
+          pip install -r requirements_streamlit.txt -r requirements_api.txt
+          pip install pytest pandas numpy
       - name: Governance and control-plane tests
         run: python -m pytest tests/test_dpia_workspace.py tests/test_control_plane.py tests/test_import_surface.py -q
       - name: Import surface
-        run: python -c "from utils.data_loaders import load_model_info; from src.control_plane.runtime import execute_guarded"
+        run: python -c "from utils.data_loaders import load_model_info; import api_server; from src.control_plane.runtime import execute_guarded; assert api_server.app is not None"

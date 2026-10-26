@@ -41,6 +41,9 @@
 
 !tests/
 !tests/*.py
+!tests/fixtures/
+!tests/fixtures/**
+!requirements_api.txt
 
 !docs/
 !docs/governance/
@@ -49,6 +52,7 @@
 docs/governance/assessments/
 docs/governance/control_plane_audit.jsonl
 docs/governance/policies.json
+docs/governance/approvals.json
 
 __pycache__/
 *.py[cod]

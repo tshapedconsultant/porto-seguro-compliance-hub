@@ -151,7 +151,8 @@ def test_art36_flag_not_auto_submit():
     reassess_residual(risk, [])
     flag = art36_needed([risk])
     assert flag["legal_review_required"] is True
-    assert flag["may_require_prior_consultation"] is False
+    assert flag["consultation_status"] == "legal_review_required"
+    assert flag["may_require_prior_consultation"] is None
     assert flag["auto_submit"] is False
 
 
@@ -203,6 +204,100 @@ def test_invalid_screening_string():
     result = screen_necessity({"q_profiling": "no"})
     assert result["outcome"] == "further_assessment_required"
     assert "invalid_answers" in result
+
+
+def _complete_for_approval(store: AssessmentStore, item):
+    from src.governance.dpia_workspace.proportionality import assess_proportionality
+    from src.governance.dpia_workspace.risk_engine import score_risk
+    from src.governance.dpia_workspace.screening import SCREENING_QUESTIONS, screen_necessity
+
+    item.processing["activity_name"] = "scoring"
+    item.processing["controller"] = {"name": "lab"}
+    item.processing["purposes"] = ["advisory claim score"]
+    answers = {q["id"]: False for q in SCREENING_QUESTIONS}
+    answers["q_automated_legal"] = True
+    item.screening = screen_necessity(answers, item.processing)
+    item.proportionality = assess_proportionality(
+        item.processing, {"art22_safeguards": "human reviewer"}
+    )
+    risk = score_risk(likelihood=3, severity=3, threat="over-reliance", harm="unfair refusal analogue")
+    item.risks = [risk]
+    item.controls = [
+        {
+            "status": "verified_in_target",
+            "verification_state": "verified",
+            "addresses_risks": [risk["risk_id"]],
+            "reduction_justification": "Human review before any analogue decision.",
+            "affects_dimension": "severity",
+            "reduction_magnitude": 1,
+        }
+    ]
+    item.evidence = [{"description": "lab model card", "source": "pages/01"}]
+    return store.save(item)
+
+
+def test_approval_hash_persists_and_material_change_reopens(tmp_path):
+    store = AssessmentStore(tmp_path)
+    item = store.create("full")
+    item = _complete_for_approval(store, item)
+    store.add_review(
+        item,
+        role="decision_maker",
+        actor="controller",
+        decision="approved_internally",
+        rationale="lab internal only",
+    )
+    loaded = store.get(item.assessment_id)
+    assert loaded.decision_state == "approved_internally"
+    assert loaded.approved_content_hash
+    loaded.processing["purposes"] = ["changed purpose after approval"]
+    saved = store.save(loaded)
+    assert saved.decision_state == "pending_review"
+    assert saved.approved_content_hash
+
+
+def test_empty_risk_stub_not_approvable(tmp_path):
+    store = AssessmentStore(tmp_path)
+    item = store.create("stub")
+    item.processing["activity_name"] = "x"
+    item.processing["controller"] = {"name": "c"}
+    item.processing["purposes"] = ["p"]
+    item.screening = {"outcome": "full_eipa_appears_necessary", "scope": "gdpr_personal_data"}
+    item.proportionality = {"findings": {"purpose_specification": "specified"}}
+    item.risks = [{}]
+    store.add_review(
+        item,
+        role="decision_maker",
+        actor="c",
+        decision="approved_internally",
+        rationale="stub",
+    )
+    loaded = store.get(item.assessment_id)
+    assert loaded.decision_state != "approved_internally"
+
+
+def test_overlapping_controls_do_not_stack():
+    risk = score_risk(likelihood=5, severity=5, threat="t", harm="h")
+    controls = [
+        {
+            "addresses_risks": [risk["risk_id"]],
+            "status": "verified_in_target",
+            "verification_state": "verified",
+            "reduction_justification": "a",
+            "affects_dimension": "both",
+            "reduction_magnitude": 1,
+        },
+        {
+            "addresses_risks": [risk["risk_id"]],
+            "status": "verified_in_target",
+            "verification_state": "verified",
+            "reduction_justification": "b",
+            "affects_dimension": "both",
+            "reduction_magnitude": 1,
+        },
+    ]
+    out = reassess_residual(risk, controls)
+    assert out["residual_score"] == 16
 
 
 def test_tested_control_does_not_cut_residual():

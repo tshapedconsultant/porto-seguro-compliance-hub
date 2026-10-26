@@ -156,22 +156,30 @@ st.page_link("pages/03_Explainability.py", label="Abrir explicabilidad nativa (a
 
 st.header("Expediente dinámico")
 st.caption("AssessmentStore (no es el pack estático). Un cambio material invalida una aprobación interna.")
-dyn = AssessmentStore().ensure_demo()
-st.write(
-    {
-        "id": dyn.assessment_id,
-        "decision_state": dyn.decision_state,
-        "screening_outcome": dyn.screening.get("outcome"),
-        "screening_scope": dyn.screening.get("scope"),
-        "risks": len(dyn.risks),
-    }
-)
-st.download_button(
-    label="Descargar PDF del expediente dinámico",
-    data=assessment_pdf_bytes(dyn),
-    file_name=f"{dyn.assessment_id}.pdf",
-    mime="application/pdf",
-)
+store = AssessmentStore()
+dyn = None
+if "EIPD-porto-demo" in store.list_ids():
+    dyn = store.get("EIPD-porto-demo")
+else:
+    st.info("No hay expediente dinámico en disco. Sembrar escribe un JSON local.")
+    if st.button("Crear expediente demo en disco"):
+        dyn = store.ensure_demo()
+if dyn is not None:
+    st.write(
+        {
+            "id": dyn.assessment_id,
+            "decision_state": dyn.decision_state,
+            "screening_outcome": dyn.screening.get("outcome"),
+            "screening_scope": dyn.screening.get("scope"),
+            "risks": len(dyn.risks),
+        }
+    )
+    st.download_button(
+        label="Descargar PDF del expediente dinámico",
+        data=assessment_pdf_bytes(dyn),
+        file_name=f"{dyn.assessment_id}.pdf",
+        mime="application/pdf",
+    )
 
 st.markdown("---")
 st.subheader("Pack de evidencia")

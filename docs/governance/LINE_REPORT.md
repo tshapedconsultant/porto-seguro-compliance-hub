@@ -16,7 +16,7 @@ Hechos en disco, no intenciones.
 | Motor de políticas | `src/control_plane/` | Código presente |
 | Página Streamlit pack | `pages/08_DPIA_GDPR.py` | Pack JSON + descarga |
 | API predicción | `api_server.py` `/predict` y `/batch_predict` | Pasan por `execute_guarded` **en este proceso** |
-| Tests de borde | `tests/test_dpia_workspace.py`, `tests/test_control_plane.py` | LIMIT real, REDACT, binding, cadena de auditoría |
+| Tests de borde | `tests/test_dpia_workspace.py`, `tests/test_control_plane.py`, `tests/test_import_surface.py` | CI instala Streamlit+API; REDACT anidado fail-closed; hash EIPD; Annex III 2027-12-02 |
 | Persistencia EIPD | `docs/governance/assessments/*.json` | Local; **no** se publica en GitHub |
 | Auditoría control plane | JSONL con hash encadenado | No es WORM; el fichero se puede reescribir |
 

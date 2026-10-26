@@ -76,3 +76,34 @@ def test_get_stratified_split_proportions():
     assert abs(len(test_df) / 1000 - 0.2) < 0.05
     assert abs(len(train_df) / 1000 - 0.8) < 0.05
 
+
+def test_imputation_uses_train_median_not_test():
+    """Anti-leakage: nulls in test are filled with train median even when medians differ."""
+    train_df = pl.DataFrame(
+        {
+            "feature_1": [1.0, 2.0, 3.0, 4.0, 5.0],
+            "target": [0, 1, 0, 1, 0],
+            "id": [1, 2, 3, 4, 5],
+        }
+    )
+    test_df = pl.DataFrame(
+        {
+            "feature_1": [50.0, 60.0, 70.0],
+            "target": [0, 1, 0],
+            "id": [6, 7, 8],
+        }
+    )
+
+    fe = ResponsibleFeatureEngineer(target_col="target")
+    fe.fit(train_df)
+
+    expected_train_median = train_df["feature_1"].median()
+    assert fe.medians["feature_1"] == expected_train_median
+    assert expected_train_median != test_df["feature_1"].median()
+
+    test_with_null = test_df.with_columns(pl.lit(None).alias("feature_1"))
+    transformed = fe.transform(test_with_null)
+    assert transformed["feature_1"][0] == expected_train_median
+    assert transformed["feature_1"][0] != test_df["feature_1"].median()
+    assert transformed["feature_1_missing"][0] == 1
+

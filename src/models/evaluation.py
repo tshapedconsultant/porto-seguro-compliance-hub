@@ -27,6 +27,7 @@ from pathlib import Path
 
 from sklearn.metrics import (
     accuracy_score,
+    brier_score_loss,
     classification_report,
     confusion_matrix,
     f1_score,
@@ -166,6 +167,62 @@ def evaluate_model(
     logger.info(f"Recall: {metrics['recall']:.4f}")
 
     return metrics
+
+
+def compute_f1_optimal_threshold(
+    y_true: np.ndarray,
+    y_prob: np.ndarray,
+) -> float:
+    """
+    Threshold that maximizes F1 on the provided labels/scores only.
+
+    Callers must pass a train/validation split — never the full train+test
+    matrix — so official reporting does not leak hold-out information.
+    """
+    y_true = np.asarray(y_true).ravel()
+    y_prob = np.asarray(y_prob).ravel()
+    precisions, recalls, thresholds = precision_recall_curve(y_true, y_prob)
+    if len(thresholds) == 0:
+        return 0.5
+    f1_scores = 2 * (precisions[:-1] * recalls[:-1]) / (precisions[:-1] + recalls[:-1] + 1e-10)
+    return float(thresholds[int(np.argmax(f1_scores))])
+
+
+def compute_brier_score(y_true: np.ndarray, y_prob: np.ndarray) -> float:
+    """Technical Brier score (lower is better). Not a regulatory claim."""
+    return float(brier_score_loss(np.asarray(y_true).ravel(), np.asarray(y_prob).ravel()))
+
+
+def expected_calibration_error(
+    y_true: np.ndarray,
+    y_prob: np.ndarray,
+    n_bins: int = 10,
+) -> float:
+    """
+    Expected Calibration Error (ECE) — technical reliability metric.
+
+    Bins predicted probabilities and averages |confidence - accuracy| weighted
+    by bin mass. Not a conformity or certification statement.
+    """
+    y_true = np.asarray(y_true).ravel().astype(float)
+    y_prob = np.asarray(y_prob).ravel().astype(float)
+    bin_edges = np.linspace(0.0, 1.0, n_bins + 1)
+    ece = 0.0
+    n = len(y_true)
+    if n == 0:
+        return 0.0
+    for i in range(n_bins):
+        lo, hi = bin_edges[i], bin_edges[i + 1]
+        if i == n_bins - 1:
+            mask = (y_prob >= lo) & (y_prob <= hi)
+        else:
+            mask = (y_prob >= lo) & (y_prob < hi)
+        if not np.any(mask):
+            continue
+        conf = float(np.mean(y_prob[mask]))
+        acc = float(np.mean(y_true[mask]))
+        ece += (np.sum(mask) / n) * abs(acc - conf)
+    return float(ece)
 
 
 def calculate_business_metrics(

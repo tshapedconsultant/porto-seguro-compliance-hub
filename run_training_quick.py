@@ -1,28 +1,72 @@
 """
 Quick Training Script (Small Sample - For Testing Only)
-WARNING: This uses a small sample and will give inflated metrics.
-Use run_training.py for production-ready evaluation.
+
+WARNING:
+  - Uses a small sample; metrics can be inflated.
+  - Does NOT overwrite production artifacts under models/artifacts/.
+  - Writes under models/artifacts/quick/ by default (or --output-dir).
+
+Use run_training.py / run_training_full.py for production-ready evaluation.
 """
+
+from __future__ import annotations
+
+import argparse
+from pathlib import Path
 
 from src.models.ebm_train import train_ebm_pipeline
 
+DEFAULT_QUICK_DIR = Path("models/artifacts/quick")
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description=(
+            "Smoke-train EBM on a small sample. Artifacts go to models/artifacts/quick/ "
+            "by default so production models/artifacts/ is never overwritten."
+        )
+    )
+    parser.add_argument(
+        "--output-dir",
+        type=Path,
+        default=DEFAULT_QUICK_DIR,
+        help=f"Artifact directory (default: {DEFAULT_QUICK_DIR}). Required alternative to production path.",
+    )
+    parser.add_argument("--sample-size", type=int, default=10000)
+    parser.add_argument("--max-rounds", type=int, default=100)
+    parser.add_argument("--data-path", type=str, default=".")
+    parser.add_argument("--seed", type=int, default=42)
+    return parser.parse_args()
+
+
 if __name__ == "__main__":
+    args = parse_args()
+    output_dir = args.output_dir
+    if output_dir.resolve() == Path("models/artifacts").resolve():
+        raise SystemExit(
+            "Refusing to write quick-run artifacts into models/artifacts/ "
+            "(production path). Use the default models/artifacts/quick/ or another --output-dir."
+        )
+
     print("=" * 60)
     print("QUICK TRAINING (Small Sample - Testing Only)")
     print("WARNING: Metrics will be inflated due to small test set")
+    print(f"Artifacts will be written to: {output_dir}")
+    print("Production models/artifacts/ will NOT be overwritten")
     print("Use run_training.py for realistic evaluation")
     print("=" * 60)
     print()
-    
+
     try:
-        # Quick test with small sample
         results = train_ebm_pipeline(
-            data_path=".",
-            sample_size=10000,  # Small sample for quick testing
-            hyperparameters={"max_rounds": 100},  # Reduced for speed
-            random_seed=42
+            data_path=args.data_path,
+            sample_size=args.sample_size,
+            hyperparameters={"max_rounds": args.max_rounds},
+            random_seed=args.seed,
+            artifacts_dir=output_dir,
+            write_legacy_copies=False,
         )
-        
+
         print()
         print("=" * 60)
         print("[WARNING] These metrics are INFLATED due to small sample size")
@@ -35,10 +79,11 @@ if __name__ == "__main__":
         print(f"   Test F1-Score: {results['metrics']['test_f1']:.4f}")
         print(f"   Optimal Threshold: {results['metrics']['optimal_threshold']:.4f}")
         print()
-        print("Artifacts Saved:")
+        print("Artifacts Saved (quick sandbox only):")
         print(f"   Model: {results['paths']['model']}")
         print(f"   Feature Engineer: {results['paths']['feature_engineer']}")
-        
+        print(f"   Run manifest: {results['paths'].get('run_manifest')}")
+
     except ImportError as e:
         print(f"\n[ERROR] Missing dependency: {e}")
         print("\nTo install InterpretML, run:")
@@ -46,11 +91,5 @@ if __name__ == "__main__":
     except Exception as e:
         print(f"\n[ERROR] {e}")
         import traceback
+
         traceback.print_exc()
-
-
-
-
-
-
-

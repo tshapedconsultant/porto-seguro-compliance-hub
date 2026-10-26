@@ -4,6 +4,10 @@ on:
   push:
     branches: [master]
   pull_request:
+  workflow_dispatch:
+  schedule:
+    # Weekly optional ML suite (Sunday 06:00 UTC)
+    - cron: "0 6 * * 0"
 
 jobs:
   tests:
@@ -21,3 +25,28 @@ jobs:
         run: python -m pytest tests/test_dpia_workspace.py tests/test_control_plane.py tests/test_import_surface.py -q
       - name: Import surface
         run: python -c "from utils.data_loaders import load_model_info; import api_server; from src.control_plane.runtime import execute_guarded; assert api_server.app is not None"
+
+  ml-synthetic:
+    # Optional heavy job: manual workflow_dispatch or weekly schedule only.
+    # Does not run on PR/push so governance CI stays the merge gate.
+    if: github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install ML test deps
+        run: pip install -r requirements-ml.txt
+      - name: Synthetic EBM / FE / drift suite
+        run: >
+          python -m pytest
+          tests/test_feature_engineering.py
+          tests/test_proper_pipeline.py
+          tests/test_ebm_pipeline.py
+          tests/test_drift_monitoring.py
+          tests/test_model_evaluation.py
+          tests/test_robustness.py
+          tests/test_fairness_subgroups.py
+          -q
+          --tb=short

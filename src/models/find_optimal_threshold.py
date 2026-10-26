@@ -22,7 +22,6 @@ from sklearn.metrics import (
     classification_report,
     confusion_matrix,
     f1_score,
-    precision_recall_curve,
     precision_score,
     recall_score,
     roc_auc_score,
@@ -32,6 +31,7 @@ sys.path.append(os.getcwd())
 
 from src.data_processing.feature_engineering import get_stratified_split
 from src.data_processing.load_data_polars import load_porto_seguro_data
+from src.models.evaluation import compute_f1_optimal_threshold
 from src.models.interpret_bridge import predict_proba_ebm
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
@@ -144,11 +144,8 @@ def find_optimal_threshold(
         )
 
     if optimize_threshold:
-        # Match ebm_train.py: tune threshold on train, evaluate F1 on test
-        precisions, recalls, thresholds = precision_recall_curve(y_train, y_prob_train)
-        f1_scores = 2 * (precisions[:-1] * recalls[:-1]) / (precisions[:-1] + recalls[:-1] + 1e-10)
-        best_idx = int(np.argmax(f1_scores))
-        best_threshold = float(thresholds[best_idx])
+        # Match ebm_train.py: tune threshold on TRAIN only, evaluate F1 on test
+        best_threshold = compute_f1_optimal_threshold(y_train, y_prob_train)
     else:
         path = ARTIFACTS_DIR / "optimal_threshold.txt"
         best_threshold = float(path.read_text(encoding="utf-8").strip()) if path.exists() else 0.5
@@ -195,16 +192,20 @@ def find_optimal_threshold(
 
     try:
         if optimize_threshold:
+            from sklearn.metrics import precision_recall_curve
+
+            precisions, recalls, thresholds = precision_recall_curve(y_train, y_prob_train)
             f1_scores_plot = 2 * (precisions[:-1] * recalls[:-1]) / (precisions[:-1] + recalls[:-1] + 1e-10)
             plt.figure(figsize=(12, 8))
             plt.subplot(2, 1, 1)
-            plt.plot(thresholds, f1_scores_plot, label="F1", color="blue")
+            plt.plot(thresholds, f1_scores_plot, label="F1 (train-tuned)", color="blue")
             plt.axvline(best_threshold, color="red", linestyle=":", label=f"Optimal {best_threshold:.3f}")
-            plt.title("Threshold optimization (hold-out test only)")
+            plt.title("Threshold optimization (tuned on train split only)")
             plt.legend()
             plt.grid(True, alpha=0.3)
             plt.subplot(2, 1, 2)
-            plt.plot(recalls, precisions, color="blue")
+            prec_t, rec_t, _ = precision_recall_curve(y_test, y_prob_test)
+            plt.plot(rec_t, prec_t, color="blue")
             plt.title("Precision-Recall (hold-out test)")
             plt.tight_layout()
             out = ARTIFACTS_DIR / "threshold_analysis.png"

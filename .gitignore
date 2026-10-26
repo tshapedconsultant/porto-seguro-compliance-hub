@@ -18,6 +18,7 @@
 
 !requirements.txt
 !requirements_streamlit.txt
+!requirements-ml.txt
 !run_training.py
 !run_training_full.py
 !run_training_quick.py
@@ -25,6 +26,11 @@
 !.github/
 !.github/workflows/
 !.github/workflows/ci.yml
+
+# Local ML artifacts stay ignored (including quick sandbox + manifests/pickles)
+models/
+models/artifacts/
+models/artifacts/quick/
 
 !src/
 !src/governance/

@@ -19,46 +19,49 @@ from src.data_processing.feature_engineering import (
 
 def test_responsible_feature_engineer_fit_transform():
     """Test that ResponsibleFeatureEngineer prevents data leakage."""
-    # Create data with missing values
-    data = {
-        "feature_1": [1, 2, None, 4, 5, 6, 7, 8, 9, 10],
-        "feature_2": [1.0, 2.0, None, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0],
-        "cat_feature": [1, 2, None, 1, 2, 3, 1, 2, 3, 1],
-        "target": [0, 1, 0, 1, 0, 1, 0, 1, 0, 1],
-        "id": list(range(10))
-    }
-    df = pl.DataFrame(data)
-    
-    # Split FIRST (critical for no leakage)
-    train_df, test_df = get_stratified_split(df, target_col="target", test_size=0.3)
-    
-    # Fit engineer on TRAIN only
+    # Deterministic case: train median != test median so leakage would fail.
+    train_df = pl.DataFrame(
+        {
+            "feature_1": [1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
+            "feature_2": [1.0, 2.0, None, 4.0, 5.0, 6.0],
+            "cat_feature": [1, 2, None, 1, 2, 3],
+            "target": [0, 1, 0, 1, 0, 1],
+            "id": list(range(6)),
+        }
+    )
+    test_df = pl.DataFrame(
+        {
+            "feature_1": [100.0, 200.0, 300.0],
+            "feature_2": [10.0, 20.0, 30.0],
+            "cat_feature": [1, 2, 1],
+            "target": [0, 1, 0],
+            "id": [6, 7, 8],
+        }
+    )
+
     fe = ResponsibleFeatureEngineer(target_col="target")
     fe.fit(train_df)
-    
-    # Transform both using train statistics
+
     train_eng = fe.transform(train_df)
     test_eng = fe.transform(test_df)
-    
-    # Verify no data leakage: test uses train statistics
+
     assert fe.trained, "Feature engineer should be trained"
-    
-    # Verify missing values are filled
     assert train_eng["feature_1"].null_count() == 0
     assert test_eng["feature_1"].null_count() == 0
-    
-    # Verify missing flags are created (always created for consistency)
     assert "feature_1_missing" in train_eng.columns
-    assert "feature_1_missing" in test_eng.columns or test_eng["feature_1"].null_count() == 0
-    
-    # Verify frequency encoding
+    assert "feature_1_missing" in test_eng.columns
     assert "cat_feature_freq" in train_eng.columns
     assert "cat_feature_freq" in test_eng.columns
-    
-    # Verify test uses train statistics (not its own)
-    train_median = fe.medians["feature_1"]
-    # Test should use same median as train
-    assert train_median == fe.medians["feature_1"]
+
+    expected_train_median = train_df["feature_1"].median()
+    assert fe.medians["feature_1"] == expected_train_median
+    assert expected_train_median != test_df["feature_1"].median()
+
+    # Always force nulls in test so transform imputation is exercised
+    test_with_null = test_df.with_columns(pl.lit(None).alias("feature_1"))
+    transformed = fe.transform(test_with_null)
+    assert transformed["feature_1"][0] == expected_train_median
+    assert transformed["feature_1"][0] != test_df["feature_1"].median()
 
 
 def test_stratified_split_maintains_distribution():
@@ -95,48 +98,31 @@ def test_stratified_split_maintains_distribution():
 
 
 def test_no_data_leakage_in_pipeline():
-    """Test that the pipeline prevents data leakage."""
-    # Create data
-    data = {
-        "feature_1": list(range(100)),
-        "feature_2": list(range(100, 200)),
-        "target": [0, 1] * 50
-    }
-    df = pl.DataFrame(data)
-    
-    # Split first
-    train_df, test_df = get_stratified_split(df, target_col="target", test_size=0.2)
-    
-    # Fit on train only
+    """Test that the pipeline prevents data leakage with forced train/test median gap."""
+    train_df = pl.DataFrame(
+        {
+            "feature_1": list(range(80)),
+            "feature_2": list(range(80, 160)),
+            "target": [0, 1] * 40,
+        }
+    )
+    test_df = pl.DataFrame(
+        {
+            "feature_1": list(range(1000, 1020)),
+            "feature_2": list(range(2000, 2020)),
+            "target": [0, 1] * 10,
+        }
+    )
+
     fe = ResponsibleFeatureEngineer(target_col="target")
     fe.fit(train_df)
-    
-    # Get train median (this is what should be used for test)
-    train_median_feature1 = fe.medians["feature_1"]
-    
-    # Calculate what test median would be (we should NOT use this)
-    test_median_feature1 = test_df["feature_1"].median()
-    
-    # Transform test - it should use train median, not test median
-    test_eng = fe.transform(test_df)
-    
-    # Verify test uses train statistics
-    # If test had a null, it would be filled with train_median, not test_median
-    assert train_median_feature1 in fe.medians.values()
-    
-    # The key test: if we add a null to test and transform,
-    # it should use train median
-    test_with_null = test_df.with_columns(
-        pl.when(pl.col("feature_1") == test_df["feature_1"][0])
-        .then(None)
-        .otherwise(pl.col("feature_1"))
-        .alias("feature_1")
-    )
-    
-    test_eng_with_null = fe.transform(test_with_null)
-    
-    # The null should be filled with train median
-    filled_value = test_eng_with_null["feature_1"][0]
-    assert filled_value == train_median_feature1, \
-        "Test should use train median, not calculate its own!"
+
+    expected_train_median = train_df["feature_1"].median()
+    assert fe.medians["feature_1"] == expected_train_median
+    assert expected_train_median != test_df["feature_1"].median()
+
+    test_with_null = test_df.with_columns(pl.lit(None).alias("feature_1"))
+    transformed = fe.transform(test_with_null)
+    assert transformed["feature_1"][0] == expected_train_median
+    assert transformed["feature_1"][0] != test_df["feature_1"].median()
 

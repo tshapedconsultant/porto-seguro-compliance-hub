@@ -10,13 +10,19 @@ This module orchestrates the training pipeline:
 5. Saves both Model and Feature Engineer artifacts for inference.
 """
 
-import polars as pl
-import pandas as pd
-import numpy as np
-import joblib
+import hashlib
+import json
 import logging
+import uuid
+from datetime import datetime, timezone
+from importlib import metadata as importlib_metadata
 from pathlib import Path
-from typing import Dict, Tuple, Optional, Any
+from typing import Any, Dict, Optional, Tuple
+
+import joblib
+import numpy as np
+import pandas as pd
+import polars as pl
 
 # Configuration (must be before logger usage)
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -37,9 +43,65 @@ from src.data_processing.feature_engineering import (
     ResponsibleFeatureEngineer, 
     get_stratified_split
 )
+from src.models.evaluation import compute_f1_optimal_threshold
 
-ARTIFACTS_DIR = Path("models/artifacts")
-ARTIFACTS_DIR.mkdir(parents=True, exist_ok=True)
+DEFAULT_ARTIFACTS_DIR = Path("models/artifacts")
+# Back-compat alias; prefer passing artifacts_dir= into train_ebm_pipeline.
+ARTIFACTS_DIR = DEFAULT_ARTIFACTS_DIR
+
+
+def _package_version(name: str) -> Optional[str]:
+    try:
+        return importlib_metadata.version(name)
+    except importlib_metadata.PackageNotFoundError:
+        return None
+
+
+def _dataset_fingerprint(data_path: str, sample_size: Optional[int], random_seed: int) -> str:
+    """Pragmatic dataset marker — not cryptographic provenance."""
+    train_csv = Path(data_path) / "train.csv"
+    if train_csv.exists():
+        digest = hashlib.sha256()
+        with train_csv.open("rb") as fh:
+            for chunk in iter(lambda: fh.read(1024 * 1024), b""):
+                digest.update(chunk)
+        marker = digest.hexdigest()[:16]
+        return f"train.csv:{marker}:sample={sample_size}:seed={random_seed}"
+    return f"synthetic_or_missing:sample={sample_size}:seed={random_seed}"
+
+
+def write_run_manifest(
+    artifacts_dir: Path,
+    *,
+    run_id: str,
+    dataset_hash: str,
+    config: Dict[str, Any],
+    metrics: Dict[str, Any],
+    artifact_paths: Dict[str, Any],
+) -> Path:
+    """Emit run_manifest.json (operational provenance MVP, not a trust attestation)."""
+    artifacts_dir.mkdir(parents=True, exist_ok=True)
+    manifest = {
+        "run_id": run_id,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "dataset_hash": dataset_hash,
+        "config": config,
+        "lib_versions": {
+            "polars": _package_version("polars"),
+            "interpret": _package_version("interpret"),
+            "numpy": _package_version("numpy"),
+            "scikit-learn": _package_version("scikit-learn"),
+            "scipy": _package_version("scipy"),
+            "joblib": _package_version("joblib"),
+        },
+        "metrics": metrics,
+        "artifact_paths": artifact_paths,
+        "note": "Operational run record only — not cryptographic provenance or regulatory certification.",
+    }
+    path = artifacts_dir / "run_manifest.json"
+    path.write_text(json.dumps(manifest, indent=2, default=str), encoding="utf-8")
+    logger.info("   ✅ Saved run manifest: %s", path)
+    return path
 
 
 def train_ebm_pipeline(
@@ -48,7 +110,11 @@ def train_ebm_pipeline(
     test_size: float = 0.2,
     random_seed: int = 42,
     sample_size: Optional[int] = None,
-    hyperparameters: Optional[Dict] = None
+    hyperparameters: Optional[Dict] = None,
+    artifacts_dir: Optional[str | Path] = None,
+    write_legacy_copies: Optional[bool] = None,
+    perform_cv: bool = True,
+    perform_adversarial: bool = True,
 ) -> Dict[str, Any]:
     """
     Executes the full training pipeline with strict separation of concerns.
@@ -69,6 +135,11 @@ def train_ebm_pipeline(
         random_seed: Random seed for reproducibility
         sample_size: Optional sample size for faster testing
         hyperparameters: Optional EBM hyperparameters
+        artifacts_dir: Where to write model/FE/threshold/manifest
+            (default: models/artifacts). Use models/artifacts/quick/ for smoke runs.
+        write_legacy_copies: Also write models/ebm_model.pkl etc. Defaults to True
+            only when artifacts_dir is the production default.
+        perform_cv / perform_adversarial: Toggle robustness block (tests may disable).
         
     Returns:
         dict: Dictionary containing model, feature_engineer, and metrics
@@ -76,9 +147,17 @@ def train_ebm_pipeline(
     
     if not INTERPRET_AVAILABLE:
         raise ImportError("InterpretML not available. Install with: pip install interpret")
+
+    out_dir = Path(artifacts_dir) if artifacts_dir is not None else DEFAULT_ARTIFACTS_DIR
+    out_dir.mkdir(parents=True, exist_ok=True)
+    if write_legacy_copies is None:
+        write_legacy_copies = out_dir.resolve() == DEFAULT_ARTIFACTS_DIR.resolve()
+    run_id = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ") + "-" + uuid.uuid4().hex[:8]
+    dataset_hash = _dataset_fingerprint(data_path, sample_size, random_seed)
     
     # --- 1. Data Loading (Polars) ---
     logger.info("🚀 Starting Pipeline...")
+    logger.info("   Artifacts dir: %s", out_dir)
     df = load_porto_seguro_data(data_path, sample_size=sample_size, random_seed=random_seed)
     logger.info(f"📊 Loaded {len(df)} records with {len(df.columns)} features")
     
@@ -166,14 +245,10 @@ def train_ebm_pipeline(
         f1_score,
         precision_score,
         recall_score,
-        precision_recall_curve,
     )
-    
+
     # Find optimal threshold on TRAIN only (never tune threshold on hold-out test)
-    precisions, recalls, thresholds = precision_recall_curve(y_train, y_prob_train)
-    f1_scores = 2 * (precisions[:-1] * recalls[:-1]) / (precisions[:-1] + recalls[:-1] + 1e-10)
-    best_idx = np.argmax(f1_scores)
-    optimal_threshold = thresholds[best_idx]
+    optimal_threshold = compute_f1_optimal_threshold(y_train, y_prob_train)
 
     # Apply train-tuned threshold to test for unbiased F1/precision/recall reporting
     y_pred_optimal = (y_prob_test >= optimal_threshold).astype(int)
@@ -192,8 +267,8 @@ def train_ebm_pipeline(
     logger.info(f"   Test Precision: {test_precision:.4f}")
     logger.info(f"   Test Recall: {test_recall:.4f}")
 
-    # Reliability diagram (calibration curve) on hold-out test — supports Issue 2 / threshold debate
-    calibration_plot_path = ARTIFACTS_DIR / "calibration_curve.png"
+    # Reliability diagram (calibration curve) on hold-out test — technical metric only
+    calibration_plot_path = out_dir / "calibration_curve.png"
     brier_score = None
     try:
         from sklearn.calibration import calibration_curve
@@ -211,7 +286,6 @@ def train_ebm_pipeline(
         plt.legend(loc="lower right")
         plt.grid(True, alpha=0.3)
         plt.tight_layout()
-        ARTIFACTS_DIR.mkdir(parents=True, exist_ok=True)
         plt.savefig(calibration_plot_path, dpi=150, bbox_inches="tight")
         plt.close()
         logger.info("   ✅ Saved calibration curve: %s", calibration_plot_path)
@@ -233,94 +307,116 @@ def train_ebm_pipeline(
     y_train_val = df_train_eng.select(target_col)
     y_test_val = df_test_eng.select(target_col)
 
-    logger.info("🛡️ Running robustness validation (CV + adversarial red teaming)...")
-    robustness_results = comprehensive_validation(
-        model=ebm,
-        X_train=X_train_val,
-        y_train=y_train_val,
-        X_test=X_test_val,
-        y_test=y_test_val,
-        perform_cv=True,
-        perform_adversarial=True,
-        classification_threshold=optimal_threshold,
-    )
-    adversarial = robustness_results.get("adversarial_testing", {})
-    overall_robust = bool(adversarial.get("overall_robust", False))
-    logger.info(
-        "   Robustness result: overall_robust=%s, max_degradation=%.4f",
-        overall_robust,
-        float(adversarial.get("max_degradation", 0.0)),
-    )
+    robustness_results: Dict[str, Any] = {}
+    adversarial: Dict[str, Any] = {}
+    overall_robust = False
+    if perform_cv or perform_adversarial:
+        logger.info("🛡️ Running robustness validation (CV + adversarial red teaming)...")
+        robustness_results = comprehensive_validation(
+            model=ebm,
+            X_train=X_train_val,
+            y_train=y_train_val,
+            X_test=X_test_val,
+            y_test=y_test_val,
+            perform_cv=perform_cv,
+            perform_adversarial=perform_adversarial,
+            classification_threshold=optimal_threshold,
+        )
+        adversarial = robustness_results.get("adversarial_testing", {})
+        overall_robust = bool(adversarial.get("overall_robust", False))
+        logger.info(
+            "   Robustness result: overall_robust=%s, max_degradation=%.4f",
+            overall_robust,
+            float(adversarial.get("max_degradation", 0.0)),
+        )
 
-    robustness_path = Path("docs/robustness_results.json")
-    robustness_path.parent.mkdir(parents=True, exist_ok=True)
+    robustness_path = out_dir / "robustness_results.json"
     with open(robustness_path, "w", encoding="utf-8") as f:
-        import json
-
         json.dump(robustness_results, f, indent=2, default=str)
     logger.info("   ✅ Saved robustness results: %s", robustness_path)
 
+    # Keep a copy under docs/ only for production artifact runs
+    if write_legacy_copies:
+        docs_robustness = Path("docs/robustness_results.json")
+        docs_robustness.parent.mkdir(parents=True, exist_ok=True)
+        docs_robustness.write_text(robustness_path.read_text(encoding="utf-8"), encoding="utf-8")
+
     # --- 7. Save Artifacts ---
-    logger.info("📦 Saving artifacts...")
-    
-    # Save Model
-    model_path = ARTIFACTS_DIR / "ebm_model_v1.pkl"
+    logger.info("📦 Saving artifacts to %s ...", out_dir)
+
+    model_path = out_dir / "ebm_model_v1.pkl"
     joblib.dump(ebm, model_path)
-    
+
     # CRITICAL: Save the Feature Engineer object too!
-    # Without this, we can't process new data in production correctly
-    fe_path = ARTIFACTS_DIR / "feature_engineer_v1.pkl"
+    fe_path = out_dir / "feature_engineer_v1.pkl"
     joblib.dump(fe, fe_path)
-    
+
     logger.info(f"   ✅ Saved Model: {model_path}")
     logger.info(f"   ✅ Saved Feature Engineer: {fe_path}")
-    
-    # Save optimal threshold to file for production use
-    threshold_path = ARTIFACTS_DIR / "optimal_threshold.txt"
-    with open(threshold_path, 'w') as f:
-        f.write(str(optimal_threshold))
-    logger.info(f"   ✅ Saved Optimal Threshold: {threshold_path} ({optimal_threshold:.4f})")
-    
-    # Also save to legacy location for backward compatibility
-    legacy_model_path = Path("models/ebm_model.pkl")
-    legacy_model_path.parent.mkdir(parents=True, exist_ok=True)
-    joblib.dump(ebm, legacy_model_path)
-    
-    legacy_fe_path = Path("models/feature_engineer.pkl")
-    joblib.dump(fe, legacy_fe_path)
 
-    import hashlib
+    threshold_path = out_dir / "optimal_threshold.txt"
+    threshold_path.write_text(str(optimal_threshold), encoding="utf-8")
+    logger.info(f"   ✅ Saved Optimal Threshold: {threshold_path} ({optimal_threshold:.4f})")
+
+    if write_legacy_copies:
+        legacy_model_path = Path("models/ebm_model.pkl")
+        legacy_model_path.parent.mkdir(parents=True, exist_ok=True)
+        joblib.dump(ebm, legacy_model_path)
+        joblib.dump(fe, Path("models/feature_engineer.pkl"))
 
     for artifact in (model_path, fe_path):
         digest = hashlib.sha256(artifact.read_bytes()).hexdigest()
         artifact.with_name(artifact.name + ".sha256").write_text(f"{digest}\n", encoding="utf-8")
         logger.info("   ✅ SHA-256 sidecar: %s.sha256", artifact.name)
-    
+
+    metrics = {
+        "train_auc": train_auc,
+        "test_auc": test_auc,
+        "test_f1": test_f1,
+        "test_f1_default": float(default_f1),
+        "test_precision": test_precision,
+        "test_recall": test_recall,
+        "test_accuracy": float(test_accuracy),
+        "optimal_threshold": float(optimal_threshold),
+        "brier_score": brier_score,
+        "robustness_passed": overall_robust,
+        "robustness_max_degradation": float(adversarial.get("max_degradation", 0.0)),
+    }
+    paths = {
+        "model": str(model_path),
+        "feature_engineer": str(fe_path),
+        "threshold": str(threshold_path),
+        "calibration_plot": str(calibration_plot_path) if calibration_plot_path else None,
+        "robustness_results": str(robustness_path),
+        "artifacts_dir": str(out_dir),
+    }
+    manifest_path = write_run_manifest(
+        out_dir,
+        run_id=run_id,
+        dataset_hash=dataset_hash,
+        config={
+            "data_path": str(data_path),
+            "target_col": target_col,
+            "test_size": test_size,
+            "random_seed": random_seed,
+            "sample_size": sample_size,
+            "hyperparameters": hyperparameters or {},
+            "artifacts_dir": str(out_dir),
+        },
+        metrics=metrics,
+        artifact_paths=paths,
+    )
+    paths["run_manifest"] = str(manifest_path)
+
     logger.info("✅ Pipeline completed successfully!")
-    
+
     return {
         "model": ebm,
         "feature_engineer": fe,
-        "metrics": {
-            "train_auc": train_auc,
-            "test_auc": test_auc,
-            "test_f1": test_f1,
-            "test_f1_default": float(default_f1),
-            "test_precision": test_precision,
-            "test_recall": test_recall,
-            "test_accuracy": float(test_accuracy),
-            "optimal_threshold": float(optimal_threshold),
-            "brier_score": brier_score,
-            "robustness_passed": overall_robust,
-            "robustness_max_degradation": float(adversarial.get("max_degradation", 0.0)),
-        },
+        "metrics": metrics,
         "robustness_results": robustness_results,
-        "paths": {
-            "model": str(model_path),
-            "feature_engineer": str(fe_path),
-            "calibration_plot": str(calibration_plot_path) if calibration_plot_path else None,
-            "robustness_results": str(robustness_path),
-        }
+        "run_id": run_id,
+        "paths": paths,
     }
 
 
@@ -340,12 +436,12 @@ def load_ebm_pipeline(
     """
     # Default paths
     if model_path is None:
-        model_path = ARTIFACTS_DIR / "ebm_model_v1.pkl"
+        model_path = DEFAULT_ARTIFACTS_DIR / "ebm_model_v1.pkl"
         if not Path(model_path).exists():
             model_path = Path("models/ebm_model.pkl")
     
     if feature_engineer_path is None:
-        feature_engineer_path = ARTIFACTS_DIR / "feature_engineer_v1.pkl"
+        feature_engineer_path = DEFAULT_ARTIFACTS_DIR / "feature_engineer_v1.pkl"
         if not Path(feature_engineer_path).exists():
             feature_engineer_path = Path("models/feature_engineer.pkl")
     

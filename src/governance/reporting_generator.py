@@ -170,7 +170,7 @@ def generate_unified_ai_report(
             "global_explanations": "Available",
             "local_explanations": "Available",
             "feature_interactions": "Available",
-            "explainability_method": "Native EBM explainability with optional SHAP/LIME fallback",
+            "explainability_method": "Native EBM glass-box explainability (InterpretML)",
             "evidence_status": "evidence_available" if explainability_report else "not_assessed",
             "summary": explainability_report.get("compliance_notes", {}),
         },

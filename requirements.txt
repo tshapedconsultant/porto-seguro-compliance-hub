@@ -30,9 +30,9 @@ mlflow>=2.8.0  # Model tracking and governance
 pytest>=7.4.0
 pytest-cov>=4.1.0
 
-# Explainability (SHAP/LIME)
-shap>=0.42.0  # SHAP for model explainability
-lime>=0.2.0  # LIME for local explanations
+# Optional post-hoc explainability (not required: EBM is glass-box via InterpretML)
+# shap>=0.42.0
+# lime>=0.2.0
 
 # Statistical testing
 scipy>=1.11.0  # For statistical tests (bias audit, drift detection - Kolmogorov-Smirnov)

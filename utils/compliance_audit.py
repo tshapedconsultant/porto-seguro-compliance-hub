@@ -212,18 +212,18 @@ def build_compliance_status(
     robustness_passed: Optional[bool] = None,
     monitoring_passed: Optional[bool] = None,
 ) -> dict:
-    """Map audit outputs to UI status strings."""
+    """Map audit outputs to UI status strings (technical evidence, not a conformity decision)."""
     artifacts_ok = all(
         checks.get(k, False)
         for k in ("train_csv", "model", "feature_engineer", "training_results")
     )
 
-    solvency = "✅ Compliant" if artifacts_ok else "⚠️ Not Audited"
+    solvency = "✅ Evidence present" if artifacts_ok else "⚠️ Not Audited"
 
     if monitoring_passed is None:
         monitoring_passed = _load_monitoring_passed()
     if monitoring_passed is True:
-        monitoring = "✅ Compliant"
+        monitoring = "✅ Evidence present"
     elif monitoring_passed is False:
         monitoring = "⚠️ Review Required"
     else:
@@ -235,12 +235,11 @@ def build_compliance_status(
         and monitoring_passed is not None
         and monitoring_passed
     )
-    eu_ai_act = "✅ Compliant" if eu_ai_act_ok else (
+    eu_ai_act = "✅ Evidence present" if eu_ai_act_ok else (
         "⚠️ Review Required" if monitoring_passed is False or artifacts_ok else "⚠️ Not Audited"
     )
 
     demo = bias_audit.get("demographic_parity", {})
-    eq = bias_audit.get("equalized_odds", {})
     bias_ok = bias_audit.get("overall_compliance", False)
     bias_evaluated = demo.get("overall_parity") is not None or demo.get("attribute_tests")
 
@@ -248,29 +247,30 @@ def build_compliance_status(
         fairness = "⚠️ Not Audited"
         responsible = "⚠️ Not Audited"
     elif bias_ok:
-        fairness = "✅ Compliant"
-        responsible = "✅ Compliant"
+        fairness = "✅ Evidence present"
+        responsible = "✅ Evidence present"
     else:
         fairness = "⚠️ Review Required"
         responsible = "⚠️ Review Required"
 
-    transparency = "✅ Compliant" if artifacts_ok else "⚠️ Not Audited"
-    accountability = "✅ Compliant" if artifacts_ok else "⚠️ Not Audited"
+    transparency = "✅ Evidence present" if artifacts_ok else "⚠️ Not Audited"
+    accountability = "✅ Evidence present" if artifacts_ok else "⚠️ Not Audited"
 
     if robustness_passed is None:
         robustness_passed = _load_robustness_passed()
     if robustness_passed is True:
-        robustness = "✅ Compliant"
+        robustness = "✅ Evidence present"
     elif robustness_passed is False:
         robustness = "⚠️ Review Required"
     elif governance_passed is True:
-        robustness = "✅ Compliant"
+        robustness = "✅ Evidence present"
     elif governance_passed is False:
         robustness = "⚠️ Review Required"
     else:
         robustness = "⚠️ Not Audited"
 
-    privacy = "✅ Compliant"
+    # Demo Kaggle features are publisher-anonymised; not a Recital 26 / DPIA finding.
+    privacy = "⚠️ Demo dataset — not a privacy determination"
 
     status = {
         "overall": "⚠️ Not Audited",
@@ -284,15 +284,16 @@ def build_compliance_status(
         "monitoring": monitoring,
         "privacy": privacy,
         "last_audit": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "status_note": "Technical evidence labels only — not AEPD/GDPR/AI Act certification.",
     }
 
     pillars = [solvency, eu_ai_act, responsible, fairness, robustness, monitoring]
     if all("✅" in s for s in pillars):
-        status["overall"] = "✅ Compliant"
+        status["overall"] = "✅ Evidence present"
     elif any("⚠️" in s for s in pillars):
         status["overall"] = "⚠️ Review Required"
     else:
-        status["overall"] = "❌ Non-Compliant"
+        status["overall"] = "❌ Gaps detected"
     return status
 
 

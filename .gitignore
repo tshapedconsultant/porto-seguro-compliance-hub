@@ -20,6 +20,7 @@
 !requirements_streamlit.txt
 !run_training.py
 !run_training_full.py
+!run_training_quick.py
 !run_production_monitor.py
 !.github/
 !.github/workflows/

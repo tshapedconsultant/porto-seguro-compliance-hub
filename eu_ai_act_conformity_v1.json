@@ -65,8 +65,9 @@
     "global_explanations": "Available",
     "local_explanations": "Available",
     "feature_interactions": "Available",
-    "explainability_method": "Native EBM explainability with optional SHAP/LIME fallback",
-    "compliance_status": "Compliant",
+    "explainability_method": "Native EBM glass-box explainability (InterpretML)",
+    "compliance_status": "not_a_conformity_decision",
+    "evidence_status": "evidence_available",
     "summary": {
       "global": "EBM native",
       "local": "EBM native",
@@ -77,14 +78,16 @@
     "risk_management": "Model explainability enables risk assessment",
     "governance": "Model documentation and monitoring in place",
     "validation": "Model performance validated on test set",
-    "compliance_status": "Compliant"
+    "evidence_status": "review_required",
+    "compliance_status": "not_a_conformity_decision"
   },
   "eu_ai_act_compliance": {
-    "risk_category": "High-risk (insurance decision-making)",
+    "risk_category": "conditional — Annex III 5(c) is life/health, not all insurance; operator must classify",
     "transparency": "Native explainability provided",
     "human_oversight": "Model supports human-in-the-loop decisions",
     "accuracy_robustness": "ROC-AUC: 0.6391",
-    "compliance_status": "Compliant"
+    "evidence_status": "conditional",
+    "compliance_status": "not_a_conformity_decision"
   },
   "responsible_ai_compliance": {
     "fairness": {
@@ -415,9 +418,9 @@
         }
       }
     },
-    "privacy": "No personal data in model features",
+    "privacy": "Demo Kaggle features are publisher-anonymised; not a Recital 26 legal finding",
     "drift_monitoring": {
-      "status": "Compliant",
+      "status": "evidence_available",
       "overall_status": "healthy",
       "monitoring_passed": true,
       "evidence_file": "docs\\drift_monitoring_latest.json",
@@ -426,9 +429,10 @@
       "data_drift_detected": false,
       "model_drift_detected": false,
       "alerts": [],
-      "summary": "Evaluated continuously via production_compliance_gate. See drift_monitoring_latest.json for current status."
+      "summary": "Evaluated via production_compliance_gate when artifacts exist locally. Metrics alone are not a conformity decision."
     },
-    "compliance_status": "Compliant"
+    "evidence_status": "review_required",
+    "compliance_status": "not_a_conformity_decision"
   },
   "recommendations": [
     "Monitor model performance in production",

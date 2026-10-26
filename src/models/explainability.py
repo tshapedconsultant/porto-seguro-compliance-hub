@@ -368,7 +368,7 @@ def lime_explanation(model, X_sample, feature_names=None, class_names=None):
 
 def comprehensive_explainability(model, X_sample, feature_names=None):
     """
-    Generate comprehensive explainability using EBM native + SHAP/LIME fallback.
+    Generate comprehensive explainability (EBM native primary; optional SHAP/LIME if installed).
 
     Args:
         model: Trained model

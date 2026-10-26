@@ -191,18 +191,29 @@ def load_compliance_status(_cache_key: float = 0.0) -> dict:
 
     robustness_passed = _load_robustness_passed()
     if robustness_passed is True:
-        default_status["robustness"] = "✅ Compliant"
+        default_status["robustness"] = "✅ Evidence present"
     elif robustness_passed is False:
         default_status["robustness"] = "⚠️ Review Required"
 
     monitoring_passed = _load_monitoring_passed()
     if monitoring_passed is True:
-        default_status["monitoring"] = "✅ Compliant"
+        default_status["monitoring"] = "✅ Evidence present"
         if default_status.get("eu_ai_act", "").startswith("⚠️"):
-            default_status["eu_ai_act"] = "✅ Compliant"
+            default_status["eu_ai_act"] = "✅ Evidence present"
     elif monitoring_passed is False:
         default_status["monitoring"] = "⚠️ Review Required"
 
+    # Never surface legacy "Compliant" strings as a conformity decision.
+    for key, value in list(default_status.items()):
+        if isinstance(value, str) and "Compliant" in value:
+            default_status[key] = value.replace("Non-Compliant", "Gaps detected").replace(
+                "Compliant", "Evidence present"
+            )
+
+    default_status.setdefault(
+        "status_note",
+        "Technical evidence labels only — not AEPD/GDPR/AI Act certification.",
+    )
     return default_status
 
 

@@ -42,10 +42,10 @@ st.header("🇪🇺 Regulatory Compliance & EU AI Act Hub")
 st.warning(CONTROL_PLANE_BANNER)
 
 st.info(
-
-    "Command center for validating High-Risk AI systems under the EU AI Act and Solvency II. "
-    "GDPR Art. 35 EIPD: sidebar **DPIA GDPR** (`gdpr_dpia_v1.json`) — demonstration pack, not an AEPD filing."
-
+    "Command center for technical evidence under the EU AI Act and Solvency II. "
+    "Status labels are **evidence present / review required**, not a conformity decision. "
+    "GDPR Art. 35 EIPD: sidebar **DPIA GDPR** (`gdpr_dpia_v1.json`) — demonstration pack, not an AEPD filing. "
+    "High-risk classification is conditional (operator must map purpose to Annex III); calendar after 2026/1744 uses Annex III **2027-12-02**."
 )
 
 

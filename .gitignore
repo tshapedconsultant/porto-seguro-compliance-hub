@@ -19,6 +19,7 @@
 !requirements.txt
 !requirements_streamlit.txt
 !requirements-ml.txt
+!requirements-ml.lock
 !run_training.py
 !run_training_full.py
 !run_training_quick.py
@@ -55,11 +56,18 @@ models/artifacts/quick/
 !docs/
 !docs/governance/
 !docs/governance/LINE_REPORT.md
+!docs/governance/DEMO_PLAYBOOK.md
+!docs/governance/DEMO_*.md
+!docs/governance/INCIDENT_*.md
 
 docs/governance/assessments/
 docs/governance/control_plane_audit.jsonl
+docs/governance/control_plane_audit.jsonl.checkpoint.json
 docs/governance/policies.json
 docs/governance/approvals.json
+docs/governance/_demo_*.jsonl
+docs/governance/_demo_*.jsonl.checkpoint.json
+docs/governance/_STOP
 
 __pycache__/
 *.py[cod]

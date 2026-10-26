@@ -3,6 +3,8 @@
 **Audiencia:** revisión técnica / evidencia demostrable (p. ej. AEPD u otros stakeholders).  
 **No es** certificación AEPD, RGPD ni Reglamento de IA. Lenguaje de evidencia técnica y demo.
 
+**English:** [`DEMO_PLAYBOOK_EN.md`](DEMO_PLAYBOOK_EN.md) (full mirror).
+
 **Ámbito honesto (código actual):**
 
 - Enforcement solo en acciones que pasan por `ReferenceRuntime.execute_guarded` **en este proceso**.
@@ -13,6 +15,22 @@
 - Redis / OIDC / Object Lock **no** están implementados como runtime en vivo.
 
 Políticas por defecto: `src/control_plane/default_policies.py` (`POL-ART5-SCREEN`, `POL-EXPORT-PII`, `POL-APPROVAL-AUTONOMOUS`, `POL-REDACT-OUTPUT`, …).
+
+---
+
+## 0. Dos auditorías distintas (no confundir en demo en vivo)
+
+| | **Control-plane audit** | **Prediction audit** |
+|---|---|---|
+| **Qué es** | Cadena de hashes del runtime (`AuditLog`) | Log HTTP de predicciones (`api_server`) |
+| **Ruta típica** | `docs/governance/control_plane_audit.jsonl` (o path de demo `_demo_*.jsonl`) | `logs/prediction_audit.jsonl` |
+| **Quién escribe** | `ReferenceRuntime` / `ApprovalStore` vía `AuditLog.append` | `api_server` al servir `/predict` |
+| **Integridad** | `verify_chain()` + checkpoint local | Cola de predicciones; **no** es la cadena del control plane |
+| **Endpoint** | Scripts Python / inspección de fichero | `/audit/summary` lee el prediction log |
+
+> **Callout — control-plane audit:** hash chain local + checkpoint. Detecta reescrituras torpes del JSONL. **No** es WORM ni KMS.
+
+> **Callout — prediction audit:** telemetría de scoring HTTP. Útil para demos de API; **no** sustituye ni verifica la cadena del control plane.
 
 ---
 
@@ -109,6 +127,25 @@ sequenceDiagram
 
 **Cadena de hash (AuditLog):**  
 `event_hash_n = SHA256(canonical(event_n) + previous_event_hash)`; genesis = 64 ceros. Verificar con `AuditLog.verify_chain()` y opcionalmente `verify_checkpoint()`. Dual-rewrite de JSONL + checkpoint derrota la comprobación local — **no** es WORM.
+
+### 1.4 Ciclo de vida del ticket (`ApprovalStore`)
+
+Estados reales en `src/control_plane/approvals.py`: `pending` → `approved` | `rejected` | `expired`. Tras un `is_approved` exitoso (binding OK), el ticket pasa a `consumed` (anti-replay de un solo uso).
+
+```mermaid
+stateDiagram-v2
+    [*] --> pending: request()
+    pending --> approved: decide(approve=true)
+    pending --> rejected: decide(approve=false)
+    pending --> expired: TTL / decide tras caducidad
+    approved --> expired: TTL antes de uso
+    approved --> consumed: is_approved() OK\n(binding + un solo uso)
+    rejected --> [*]
+    expired --> [*]
+    consumed --> [*]
+```
+
+**Anti-replay:** un ticket `approved` se marca `consumed` dentro de `is_approved` al consumirse con éxito; un segundo `execute_guarded` con el mismo `ticket_id` ya no pasa (status ≠ `approved`).
 
 ---
 
@@ -262,6 +299,26 @@ for row in rows[-4:]:
     )
 ```
 
+### Salida esperada (tags de éxito)
+
+Si la demo corre bien, la consola debe mostrar líneas con estos tags (valores exactos de `ticket_id` / hashes varían):
+
+```text
+[DENY] POL-ART5-SCREEN DENY
+[TICKET] APR-... pending
+[APPROVED RUN] ok REQUIRE_HUMAN_APPROVAL {'score': 0.31, 'email': 'a@b.c', 'name': 'Ada'}
+[REDACT] {'email': '[REDACTED]', 'name': '[REDACTED]', 'score': 0.31} fields: ['email', 'name']
+[AUDIT] verify_chain= True ok events= N
+```
+
+| Tag | Significa éxito cuando… |
+|-----|-------------------------|
+| `[DENY]` | Política `POL-ART5-SCREEN` (u otra DENY) y `fn` no corrió |
+| `[TICKET]` | Ticket creado en `pending` |
+| `[APPROVED RUN]` | `status=ok` con efecto `REQUIRE_HUMAN_APPROVAL` tras ticket + binding |
+| `[REDACT]` | `email`/`name` = `[REDACTED]` |
+| `[AUDIT]` | `verify_chain= True` sobre el JSONL del **control plane** (path de demo) |
+
 ### API local (opcional; necesita artefactos + workers=1)
 
 ```powershell
@@ -287,11 +344,54 @@ curl.exe -s -X POST http://127.0.0.1:8000/predict `
   -d '{"features":{"ps_ind_01":0}}'
 ```
 
-**Notas API:** sin `.pkl` local, `/health` → unhealthy y `/predict` → 503. `/audit/summary` lee `logs/prediction_audit.jsonl` (auditoría de predicciones HTTP), **distinta** del JSONL del control plane (`docs/governance/control_plane_audit.jsonl`). Para la demo de cadena de hashes, usar el script Python de arriba.
+**Notas API:** sin `.pkl` local, `/health` → unhealthy y `/predict` → 503. `/audit/summary` lee `logs/prediction_audit.jsonl` (**prediction audit**), **distinta** del JSONL del control plane (`docs/governance/control_plane_audit.jsonl` o el path `_demo_*` del script). Para la demo de cadena de hashes, usar el script Python de arriba — ver [§0](#0-dos-auditorías-distintas-no-confundir-en-demo-en-vivo).
 
-### Checklist de límites a verbalizar (15 s)
+---
+
+## 4. Mini-demo 15 s — manipulación torpe del audit (control plane)
+
+**Objetivo:** mostrar que `AuditLog.verify_chain()` detecta una reescritura torpe de una línea JSONL.  
+**Honestidad:** detección local de manipulación burda — **no** WORM, **no** KMS, **no** Object Lock. Quien controle el filesystem puede reescribir JSONL **y** checkpoint a la vez y derrotar la comprobación.
+
+```python
+from pathlib import Path
+from src.control_plane.audit import AuditLog
+
+path = Path("docs/governance/_demo_tamper_audit.jsonl")
+cp = path.with_suffix(path.suffix + ".checkpoint.json")
+for p in (path, cp):
+    if p.exists():
+        p.unlink()
+
+audit = AuditLog(path)
+audit.append({"rule_triggered": "demo_a", "decision": "ALLOW"})
+audit.append({"rule_triggered": "demo_b", "decision": "ALLOW"})
+ok, msg = audit.verify_chain()
+print("[AUDIT] before tamper:", ok, msg)  # True ok
+
+# Reescribir una línea (manipulación torpe)
+lines = path.read_text(encoding="utf-8").splitlines()
+lines[0] = lines[0].replace('"demo_a"', '"demo_TAMPERED"')
+path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+ok2, msg2 = audit.verify_chain()
+print("[AUDIT] after tamper:", ok2, msg2)  # False chain_break_at_…
+assert ok and not ok2
+```
+
+Salida esperada:
+
+```text
+[AUDIT] before tamper: True ok
+[AUDIT] after tamper: False chain_break_at_0
+```
+
+---
+
+## 5. Checklist de límites a verbalizar (15 s)
 
 1. Un proceso / `STOP_FILE` opcional — no Redis.  
 2. Approvals = JSON mutable + strings — no SSO.  
-3. Audit = hash chain local — no WORM.  
-4. Evidencia técnica demostrable ≠ certificación normativa.
+3. Audit control-plane = hash chain local — no WORM / KMS (detecta tamper torpe).  
+4. Prediction audit (`logs/prediction_audit.jsonl`) ≠ control-plane audit.  
+5. Evidencia técnica demostrable ≠ certificación normativa.

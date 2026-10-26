@@ -101,7 +101,8 @@ See **What this still is not** above. Additional IP trust note:
 
 - [`docs/THREAT_MODEL.md`](docs/THREAT_MODEL.md) — STRIDE + trust boundaries for this stack
 - [`docs/ASSURANCE_MODEL.md`](docs/ASSURANCE_MODEL.md) — evidence present ≠ control effective ≠ conformity
-- [`docs/governance/DEMO_PLAYBOOK.md`](docs/governance/DEMO_PLAYBOOK.md) — sequence diagram + 2‑min incident + 90‑s DENY/approval/REDACT/audit demo (technical evidence; not certification)
+- [`docs/governance/DEMO_PLAYBOOK.md`](docs/governance/DEMO_PLAYBOOK.md) — ES (AEPD-facing): sequence + ticket lifecycle + 90‑s DENY/approval/REDACT/audit + 15‑s tamper demo (technical evidence; not certification)
+- [`docs/governance/DEMO_PLAYBOOK_EN.md`](docs/governance/DEMO_PLAYBOOK_EN.md) — English mirror of the demo playbook
 - Synthetic packs: [`examples/evidence/`](examples/evidence/) + schemas in [`docs/schemas/`](docs/schemas/)
 
 ### Threat & Governance Scope
@@ -274,7 +275,7 @@ porto-seguro/
 ## Line report (bottom-up)
 
 Operator facts first: [`docs/governance/LINE_REPORT.md`](docs/governance/LINE_REPORT.md).  
-Demo playbook (Mermaid + scripts): [`docs/governance/DEMO_PLAYBOOK.md`](docs/governance/DEMO_PLAYBOOK.md).
+Demo playbook (Mermaid + scripts): [`docs/governance/DEMO_PLAYBOOK.md`](docs/governance/DEMO_PLAYBOOK.md) (ES) · [`DEMO_PLAYBOOK_EN.md`](docs/governance/DEMO_PLAYBOOK_EN.md) (EN).
 
 ```bash
 pip install -r requirements_streamlit.txt -r requirements_api.txt

@@ -49,7 +49,7 @@ Calendario Art. 113 (codificado, no fetch en vivo a EUR-Lex): `src/control_plane
 6. Stop: `request_stop` → `RuntimeStopped` en la siguiente acción que pase por el adaptador.  
 7. API local: `python api_server.py` → `/predict` exige artefactos locales; sin modelo → unhealthy / 503.  
 8. Entrenamiento local (necesita `train.csv` Kaggle): `python run_training.py`.  
-9. Demo técnica (secuencia Mermaid + incidente 2 min + guion 90 s): [`DEMO_PLAYBOOK.md`](DEMO_PLAYBOOK.md).
+9. Demo técnica (secuencia Mermaid + ciclo ticket + incidente 2 min + guion 90 s + tamper 15 s): [`DEMO_PLAYBOOK.md`](DEMO_PLAYBOOK.md) (ES) · [`DEMO_PLAYBOOK_EN.md`](DEMO_PLAYBOOK_EN.md) (EN).
 
 Lo que la línea **no** puede afirmar: que stop/aprobaciones se repliquen entre workers; el runtime es un singleton **por proceso**. `/predict` y `/batch_predict` **sí** llaman a `execute_guarded` en este proceso. Métricas hold-out (ROC-AUC, F1, etc.) **no** equivalen a conformidad AEPD / RGPD / AI Act.
 

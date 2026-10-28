@@ -1,10 +1,19 @@
-# Recording guide — Governed AI demo (~2:20–2:30)
+# Recording guide — walkthrough captures
 
 **Not** AEPD, GDPR, or EU AI Act certification. Technical evidence for lab / stakeholder review.
 
-**Layout:** Streamlit = **control room** (page **09 · Governed Decision Demo**). Terminal = **small evidence strip** (`docs/governance/demo_90s.py`). Do **not** show Mermaid source on camera — use the rendered diagrams on the page.
+**What to record**
 
-**Launcher:** [`record_demo.bat`](../../record_demo.bat) (repo root). Starts Streamlit + evidence terminal only. **Does not** press Win+Alt+R — you must focus the **browser**, then start Game Bar yourself.
+| Cut | Page | Launcher |
+|-----|------|----------|
+| Control room (~2:20) | **09 · Governed Decision Demo** | `record_demo.bat` (EN) · `record_demo.bat --es` |
+| AEPD EIPD (~90 s) | **10 · AEPD EIPD Demo** | `record_demo.bat --aepd` |
+
+Do **not** show Mermaid source on camera. Use the diagrams on the Streamlit page.
+
+**Capture (current orchestrator):** [`record_demo.bat`](../../record_demo.bat) → [`auto_record_demo.py`](auto_record_demo.py). Edge fullscreen, Cursor minimized, ffmpeg desktop grab, VO muxed into the MP4. Xbox Game Bar is **not** used (it captured the IDE and dropped audio).
+
+Outputs: `%USERPROFILE%\Videos\Captures\` (`governed-ai-en.mp4`, `governed-ai-es.mp4`, `aepd-eipd-es.mp4`).
 
 Related: [`DEMO_PLAYBOOK.md`](DEMO_PLAYBOOK.md) (ES) · [`DEMO_PLAYBOOK_EN.md`](DEMO_PLAYBOOK_EN.md) (EN).
 
@@ -16,26 +25,19 @@ Related: [`DEMO_PLAYBOOK.md`](DEMO_PLAYBOOK.md) (ES) · [`DEMO_PLAYBOOK_EN.md`](
 |------|--------|
 | Do Not Disturb | On (no toast popups) |
 | Resolution | 1080p (or 1440p); browser zoom ~100–110% |
-| Fullscreen | F11 on the Streamlit tab after open |
-| Game Bar | Settings → Gaming → Captures: record mic **off** if using ElevenLabs PC audio; record system audio **on** |
-| Focus | **Browser** window focused before Win+Alt+R (not the bat, not only the evidence terminal) |
-| Page | Sidebar → **Governed Decision Demo** |
-| Audio EN | Optional pre-bake: `python _generate_demo_audio.py --lang en` → `_demo_audio/en_220/` (untracked) |
-| Audio ES (AEPD) | **Prefer your own voice** in CapCut/DaVinci (teleprompter below). Optional Castilian ElevenLabs: `python _generate_demo_audio.py --lang es` |
+| ffmpeg | On `PATH` (orchestrator will abort without it) |
+| Audio | Optional pre-bake: `python _generate_demo_audio.py --lang en` or `--lang es` → `_demo_audio/` (untracked). Needs `ELEVENLABS_API_KEY` in env, not in the repo |
+| AEPD VO | Castilian clip for `--aepd`; same generator |
 
 ---
 
-## Exact Xbox / Game Bar steps
+## Exact steps
 
-1. Double-click `record_demo.bat` (or run from repo root).
-2. Wait for Streamlit; browser opens `http://localhost:8501`.
-3. Open **Governed Decision Demo**; set sidebar to first step (Arquitectura).
-4. Optional: arrange evidence terminal as a thin strip (bottom or side) — readable tags, not the hero.
-5. **Click the browser** so it has focus.
-6. Press **Win + Alt + R** to start.
-7. Advance sidebar steps on the timeline below; let the terminal print `[DENY]` … `[TAMPER]`.
-8. Press **Win + Alt + R** to stop.
-9. Find the clip under `%USERPROFILE%\Videos\Captures`.
+1. From repo root: `record_demo.bat`, `record_demo.bat --es`, or `record_demo.bat --aepd`.
+2. Wait for Streamlit; the orchestrator opens the demo page, fullscreen, and starts capture.
+3. Do not switch to Cursor while ffmpeg is running.
+4. When it finishes, check the MP4 under `%USERPROFILE%\Videos\Captures`.
+5. Manual / silent: `record_demo.bat --no-record` or `--no-voice` (see the bat header).
 
 ---
 

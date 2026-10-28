@@ -85,7 +85,7 @@ Que un tercero clone un commit, instale, ejecute **solo** los comandos publicado
 - README alineado con CI y con ficheros que el allowlist de `.gitignore` **sí** publica.
 - Separar comandos de demo, pruebas de gobernanza y entrenamiento ML.
 - Describir cuándo corre `ml-synthetic` (rutas / cron / `workflow_dispatch`), no `continue-on-error`.
-- Crear [`docs/STATUS.md`](STATUS.md) *(aún no existe)*: capacidad, estado (implementada / parcial / planificada), archivo, test, límite.
+- [ ] Crear `docs/STATUS.md`: capacidad, estado (implementada / parcial / planificada), archivo, test y límite.
 - Fijar versión de Python (CI usa **3.12**) y locks por servicio.
 - Prueba de arranque en entorno limpio (sin `train.csv` / `.pkl`).
 - Comprobación automática de enlaces internos de documentación.
@@ -111,7 +111,7 @@ No construir “producción” sin quién, para qué y con qué consecuencias.
 
 ### Trabajo
 
-Crear `docs/PRODUCTION_SCOPE.md` *(aún no existe; no confundir con el checklist local `PRODUCTION_READINESS.md`, que son rangos Kaggle y no está en el allowlist)*.
+- [ ] Crear `docs/PRODUCTION_SCOPE.md` (aún no existe; no confundir con el checklist local de rangos Kaggle, que no está en el allowlist).
 
 Concretar: usuario y organización; finalidad de la predicción; decisión que informa y quién la toma; datos, procedencia y restricciones; individual vs lote; tráfico y concurrencia; uno o varios clientes; región; responsables (ops, modelo, seguridad, riesgo); comportamiento si el servicio no está.
 
@@ -229,7 +229,7 @@ Utilidad y límites en el **entorno objetivo**, no reproducir el ROC-AUC 0.639 d
 
 ### Trabajo
 
-Procedencia y licencia; leakage y corte temporal; train/val/test; umbral en validación y test ciego; baselines; discriminación, calibración, precision/recall operativos, coste FP/FN, incertidumbre, subgrupos. Proxies (`ps_ind_03`, …) = evidencia **limitada**, no prueba de no discriminación. Criterio de derivación a humano. Versionar dataset, FE, modelo, umbral. El esquema de inferencia debe coincidir con el de entrenamiento (`REQUIRE_ARTIFACT_HASH` on en el perfil production). Política de reentrenamiento y promoción — una alerta de drift **no** promociona sola.
+Procedencia y licencia; leakage y corte temporal; train/val/test; umbral en validación y test ciego; baselines; discriminación, calibración, precision/recall operativos, coste FP/FN, incertidumbre, subgrupos. Proxies (`ps_ind_03`, …) = evidencia **limitada**, no prueba de no discriminación. Criterio de derivación a humano. Versionar dataset, FE, modelo, umbral. El esquema de inferencia debe coincidir con el de entrenamiento. Cargar únicamente artefactos de una **fuente autorizada**, con integridad verificada contra una **referencia protegida** (un sidecar SHA-256 local no es procedencia). Política de reentrenamiento y promoción — una alerta de drift **no** promociona sola.
 
 ### Criterios de salida
 
@@ -245,7 +245,7 @@ Una unidad de despliegue reproducible. Hoy se arranca a mano (`python api_server
 
 ### Trabajo
 
-Imagen con usuario no root; config/secretos/artefactos separados; SBOM; no cargar `.pkl` sin hash; migraciones si hay Postgres; dev/staging/prod; aprobación de release; tests de integración y seguridad antes de promover; liveness/readiness (hoy `/health` solo dice si el modelo está en RAM); rollback de app y modelo; carga representativa.
+Imagen con usuario no root; config/secretos/artefactos separados; SBOM. Cargar únicamente artefactos procedentes de una fuente autorizada, con integridad verificada contra una referencia protegida — `REQUIRE_ARTIFACT_HASH` y un sidecar `.sha256` son un control de integridad, **no** prueba de procedencia. Migraciones si hay Postgres; dev/staging/prod; aprobación de release; tests de integración y seguridad antes de promover; liveness/readiness (hoy `/health` solo dice si el modelo está en RAM); rollback de app y modelo; carga representativa.
 
 ### Criterios de salida
 
@@ -301,6 +301,33 @@ La etiqueta “producción” **no** es certificación ni sustituye supervisión
 | P2 | Multitenancy y automatizaciones extra | Solo con demanda demostrada |
 
 No priorizar pantallas, integraciones o marcos regulatorios nuevos por delante de los P0.
+
+---
+
+## Backlog de seguimiento
+
+Requisitos de las fases, en tareas. **Ninguna está cerrada** porque exista este archivo. Responsable: por asignar hasta que Fase 1 nombre dueños.
+
+| ID | Tarea | Fase | Dependencia | Prueba de aceptación | Evidencia de cierre |
+|----|-------|------|-------------|----------------------|---------------------|
+| B0.1 | Inventario `docs/STATUS.md` (capacidad, estado, archivo, test, límite) | 0 | — | Un tercero localiza cada control publicado y su límite | PR + revisión |
+| B0.2 | Comandos del README = job CI `tests`; sin enlaces internos rotos | 0 | — | Clone + copy-paste del bloque Line report en verde | PR + log CI `tests` |
+| B0.3 | Arranque limpio (sin `train.csv` / `.pkl`) | 0 | B0.2 | Streamlit y `/health` arrancan; `/predict` degrada explícito (503) | Test de arranque + log |
+| B0.4 | Comprobación automática de enlaces internos de docs publicados | 0 | B0.2 | CI falla si un markdown publicado apunta a ruta inexistente | Job CI |
+| B1.1 | Alcance `docs/PRODUCTION_SCOPE.md` (quién, finalidad, datos, RTO/RPO) | 1 | — | Alcance y exclusiones firmados; Kaggle no se da por libro cliente | Documento aprobado (no un enlace vacío) |
+| B2.1 | Perfil restrictivo de despliegue | 2 | B1.1 (entorno objetivo) | Rechazo de arranque si faltan IdP, almacén o verificación obligatoria; demo no expuesto | Test de arranque negativo |
+| B2.2 | Identidad y autorización en servidor (OIDC/JWT, SoD por claims) | 2 | B2.1 | Token inválido/caducado/otra audiencia denegado; requester de body no autoriza | Tests negativos + PR |
+| B3.1 | Unificar `review_required` y binding individual/lote | 3 | — | `/predict` y `/batch_predict` misma regla legal_effect; lote con `approval_payload` | Tests de paridad y binding + CI |
+| B3.2 | Estado transaccional de aprobaciones (INSERT-only, consumo atómico) | 3 | Diseño de persistencia (B1.1) | Dos procesos no consumen el mismo ticket; replay con otro payload denegado | Test de integración |
+| B3.3 | Stop/circuit compartido entre réplicas | 3 | B3.2 o store de coordinación | Stop en A bloquea guarded en B; in-flight documentado (no aborto instantáneo) | Test de integración + runbook |
+| B4.1 | Evidencia obligatoria persistida antes del éxito | 4 | B3.2 | Fallo de log no se traga: 5xx o degradación explícita; se reconstruye una decisión | Test de caída de destino + PR |
+| B4.2 | Verificación independiente de auditoría (no HMAC en env como WORM) | 4 | B4.1 | Verificador sin write al store detecta dual-rewrite | Test + procedimiento |
+| B5.1 | Criterios de modelo del caso (no métricas Kaggle como promoción) | 5 | B1.1 | Umbral, subgrupos y dueño de promoción documentados sobre datos representativos | Acta de promoción |
+| B6.1 | Procedencia de artefactos | 6 | B2.1 | Solo fuente autorizada; integridad contra referencia **protegida**; sidecar local no basta | Test de carga + política de release |
+| B7.1 | Runbooks, alertas con dueño, restore ensayado | 7 | B3.2, B4.1 | Stop/degradación y restore ejecutados por alguien que no es el autor del repo | Acta de ejercicio |
+| B8.1 | Piloto acotado y autorización explícita | 8 | B1.1–B7.1 | Criterios de salida del piloto cumplidos o vuelta de fase | Acta conjunta |
+
+P0 inmediato (sin esperar IdP): **B0.*** y **B3.1**. B3.1 no depende de persistencia.
 
 ---
 

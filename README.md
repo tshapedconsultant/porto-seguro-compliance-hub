@@ -74,23 +74,20 @@ flowchart TB
 | **DPIA / EIPD page** | Sidebar **DPIA GDPR** | Static pack `gdpr_dpia_v1.json` + optional workspace under `src/governance/dpia_workspace/` (assessments **not** published) |
 | **Governed Decision Demo** | Sidebar **Governed Decision Demo** (`pages/09_…`) | Control-room walkthrough: DENY / HITL ticket / redact / local hash chain. `?lang=en\|es` |
 | **AEPD EIPD Demo (~90s)** | Sidebar **AEPD EIPD Demo** (`pages/10_…`) | EIPD narrative: processing → rights risk → control → evidence → residual. Dataset is **anonymized Kaggle** (595,212 rows), not a live insurance book |
-| **Recorded walkthroughs** | `record_demo.bat` · `record_demo.bat --es` · `record_demo.bat --aepd` | ffmpeg desktop + muxed VO (Edge fullscreen, Cursor minimized). **Not** Xbox Game Bar. Outputs under `%USERPROFILE%\Videos\Captures\` |
+| **Recorded walkthroughs** | `streamlit run app.py` → pages 09 / 10 | What each cut shows: table below. How to record: [`DEMO_RECORDING_220.md`](docs/governance/DEMO_RECORDING_220.md) |
 | **Inference API** | `python api_server.py` → `:8000` | `/predict` & `/batch_predict` wrapped by `execute_guarded` **in-process**; needs local artifacts for healthy inference |
 | **ML pipeline** | `run_training.py` / `run_training_full.py` | Polars → feature engineering → EBM → explainability → monitoring; needs Kaggle `train.csv` locally |
 | **CI governance job** | `.github/workflows/ci.yml` | Job `tests` (mandatory on every push/PR): control-plane + API security. Job `ml-synthetic` only on ML path changes, weekly cron, or `workflow_dispatch` — **no** `continue-on-error`; if that job runs and fails, the workflow fails |
 
 ### Walkthroughs (two cuts)
 
-Technical evidence for lab / stakeholder review. **Not** a signed EIPD and **not** an Art. 36 filing.
+Open: `streamlit run app.py` → sidebar **AEPD EIPD Demo** or **Governed Decision Demo**.  
+Recording (operators only): [`DEMO_RECORDING_220.md`](docs/governance/DEMO_RECORDING_220.md) · playbooks [`DEMO_PLAYBOOK.md`](docs/governance/DEMO_PLAYBOOK.md) (ES) · [`DEMO_PLAYBOOK_EN.md`](docs/governance/DEMO_PLAYBOOK_EN.md).
 
-| Cut | Page | How to record | What it shows | Published |
-|-----|------|---------------|---------------|-----------|
-| **AEPD EIPD (~90 s, Castilian)** | `pages/10_AEPD_EIPD_Demo.py` → `/AEPD_EIPD_Demo` | `record_demo.bat --aepd` | EIPD as the story: identify the processing (Kaggle, anonymized) → necessity and risks to rights → a live control (DENY before the model, single-use HITL ticket, fail-closed redact) → inspect the local hash chain → residual scores *estimated pending verification* → limits | [Spanish site · 05](https://tshapedconsultant.com/es/#projects) (`porto-seguro-aepd-es.mp4`) |
-| **Control room (~2:20)** | `pages/09_Governed_Decision_Demo.py` → `/Governed_Decision_Demo` | `record_demo.bat` (EN) · `record_demo.bat --es` | Runtime evidence: policy DENY (model never invoked) → bound single-use approval → anti-replay → redact → `verify_chain()` → clumsy JSONL rewrite detected. Local hash chain ≠ WORM | [English site · 05](https://tshapedconsultant.com/#projects) (`porto-seguro-governed-en.mp4`); ES control-room cut on the Spanish card |
-
-Capture is `docs/governance/auto_record_demo.py`: Edge fullscreen, Cursor minimized, ffmpeg `gdigrab`, continuous ElevenLabs VO muxed into the MP4. Xbox Game Bar is **not** used (it captured the IDE and dropped audio).
-
-Playbooks: [`DEMO_PLAYBOOK.md`](docs/governance/DEMO_PLAYBOOK.md) (ES, AEPD-facing) · [`DEMO_PLAYBOOK_EN.md`](docs/governance/DEMO_PLAYBOOK_EN.md).
+| Cut | What it shows | What it does **not** show | Published |
+|-----|---------------|---------------------------|-----------|
+| **AEPD EIPD (~90 s)** | EIPD path on anonymized Kaggle: processing → rights risk → live DENY / HITL / redact → local hash chain → residual *estimated pending verification* | Signed EIPD, Art. 36 filing, live insurance book, WORM storage | [ES site · 05](https://tshapedconsultant.com/es/#projects) |
+| **Control room (~2:20)** | Policy DENY before the model runs, single-use ticket, redact, `verify_chain()`, local tamper detection | SSO, multi-worker enforcement, immutable audit, a conformity decision | [EN site · 05](https://tshapedconsultant.com/#projects) |
 
 ### Control plane limits (honest scope)
 
@@ -127,7 +124,7 @@ See **What this still is not** above. Additional IP trust note:
 - [`docs/ROADMAP_V2.md`](docs/ROADMAP_V2.md) — Plan to make this a deployable service (phases 0–8). **Not implemented.** Does not claim conformity
 - [`docs/governance/DEMO_PLAYBOOK.md`](docs/governance/DEMO_PLAYBOOK.md) — ES (AEPD-facing): EIPD 90‑s cut + control-room sequence + ticket lifecycle (technical evidence; not certification)
 - [`docs/governance/DEMO_PLAYBOOK_EN.md`](docs/governance/DEMO_PLAYBOOK_EN.md) — English mirror of the demo playbook
-- Conformity packs (demo artefacts): [`eu_ai_act_conformity_v1.json`](eu_ai_act_conformity_v1.json) · [`gdpr_dpia_v1.json`](gdpr_dpia_v1.json)
+- Demo governance evidence packs: [`eu_ai_act_conformity_v1.json`](eu_ai_act_conformity_v1.json) · [`gdpr_dpia_v1.json`](gdpr_dpia_v1.json)
 
 ### Threat & Governance Scope
 
@@ -163,7 +160,7 @@ Short list. Full service roadmap (identity, shared state, durable evidence, ops,
 | Multi-replica rate limit | In-memory demo limiter | Gateway rate limit; no Redis backend here |
 | Evidence vs effectiveness | Assurance fields on JSON packs | Operational owners + scheduled control tests |
 | Live book + signed EIPD | Kaggle `ps_*`; DPO sign-off hypothetical | Separate processing; unsigned workspace must not enable live `/predict` |
-| Artifact pin | SHA-256 sidecars; `REQUIRE_ARTIFACT_HASH` off by default | Default **on** in a production profile |
+| Artifact trust | SHA-256 sidecars; `REQUIRE_ARTIFACT_HASH` off by default | Authorized source + integrity vs a **protected** reference (sidecar ≠ provenance) |
 
 ---
 
@@ -284,7 +281,7 @@ Proxy-based bias audits when sensitive demographics cannot be collected under pr
 porto-seguro/
 ├── app.py                          # Streamlit Model Card entrypoint
 ├── api_server.py                   # FastAPI + execute_guarded predict
-├── record_demo.bat                 # Auto walkthrough (ffmpeg + VO; --es / --aepd)
+├── record_demo.bat                 # Walkthrough recorder (see DEMO_RECORDING_220.md)
 ├── run_training.py                 # MLOps pipeline (needs train.csv)
 ├── run_training_full.py / quick    # Full / quick training variants
 ├── run_production_monitor.py       # Recurring Art. 9 monitor
@@ -301,7 +298,7 @@ porto-seguro/
 │   └── 10_AEPD_EIPD_Demo.py        # EIPD ~90 s narrative (not Art. 36)
 ├── docs/governance/
 │   ├── DEMO_PLAYBOOK.md            # ES, AEPD-facing
-│   ├── auto_record_demo.py         # ffmpeg gdigrab + muxed VO
+│   ├── DEMO_RECORDING_220.md       # How to record the two cuts
 │   └── demo_assets/                # architecture / lifecycle / hash-chain diagrams
 ├── tests/                          # Governance CI + optional ML unit tests
 └── models/artifacts/               # Model, FE, threshold, SHA-256 (gitignored)

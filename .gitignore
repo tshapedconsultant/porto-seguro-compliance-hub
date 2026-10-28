@@ -54,11 +54,20 @@ models/artifacts/quick/
 !requirements_api.txt
 
 !docs/
+!docs/ROADMAP_V2.md
+!docs/V2_ROADMAP.md
 !docs/governance/
 !docs/governance/LINE_REPORT.md
 !docs/governance/DEMO_PLAYBOOK.md
 !docs/governance/DEMO_*.md
 !docs/governance/INCIDENT_*.md
+!docs/governance/demo_90s.py
+!docs/governance/auto_record_demo.py
+!docs/governance/demo_assets/
+!docs/governance/demo_assets/**
+
+!record_demo.bat
+!_generate_demo_audio.py
 
 docs/governance/assessments/
 docs/governance/control_plane_audit.jsonl
@@ -67,7 +76,17 @@ docs/governance/policies.json
 docs/governance/approvals.json
 docs/governance/_demo_*.jsonl
 docs/governance/_demo_*.jsonl.checkpoint.json
+docs/governance/_demo_streamlit_approvals.json
+docs/governance/_demo_aepd_approvals.json
+docs/governance/_demo_record_tmp/
 docs/governance/_STOP
+
+# Local recording / TTS — never commit
+_demo_audio/
+*.mp3
+*.mp4
+.env
+Captures/
 
 __pycache__/
 *.py[cod]

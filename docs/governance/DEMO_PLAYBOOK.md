@@ -5,6 +5,14 @@
 
 **English:** [`DEMO_PLAYBOOK_EN.md`](DEMO_PLAYBOOK_EN.md) (full mirror).
 
+**Grabación AEPD ~90 s (EIPD como relato):**  
+página Streamlit **10 · AEPD EIPD Demo** · `record_demo.bat --aepd` · voz castellana.  
+Secuencia: alcance del dataset Kaggle anonimizado → finalidad/necesidad/riesgos EIPD → DENY / HITL / redacción → cadena hash y tamper local → registro de riesgos (residuales *estimados pendientes de verificación*) → límites (no EIPD formal, no art. 36).
+
+**Grabación ~2:20 (sala de control):**  
+[`DEMO_RECORDING_220.md`](DEMO_RECORDING_220.md) · [`record_demo.bat`](../../record_demo.bat) · página **09 · Governed Decision Demo** · evidencia `demo_90s.py`.  
+Captura: ffmpeg al escritorio (Edge a pantalla completa; Cursor minimizado). No es certificación.
+
 **Ámbito honesto (código actual):**
 
 - Enforcement solo en acciones que pasan por `ReferenceRuntime.execute_guarded` **en este proceso**.

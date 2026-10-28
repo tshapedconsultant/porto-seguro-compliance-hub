@@ -18,6 +18,43 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 DRIFT_EVIDENCE_DEFAULT_PATH = Path("docs/drift_monitoring_latest.json")
+SCHEMA_VERSION = "1.1.0"
+ASSURANCE_MODEL_REF = "docs/ASSURANCE_MODEL.md"
+
+
+def build_assurance_fields(
+    *,
+    evidence_available: bool,
+    control_tested: bool = False,
+    test_date: Optional[str] = None,
+    test_evidence: Optional[str] = None,
+    owner: str = "unassigned",
+    assurance_level: Optional[str] = None,
+    review_required: Optional[bool] = None,
+) -> Dict[str, Any]:
+    """
+    Separate evidence present (Layer 1) from control effective (Layer 2).
+
+    Dashboard tiles must not be read as a conformity decision — see ASSURANCE_MODEL.md.
+    """
+    if assurance_level is None:
+        if control_tested and evidence_available:
+            assurance_level = "tested"
+        elif evidence_available:
+            assurance_level = "evidence_only"
+        else:
+            assurance_level = "none"
+    if review_required is None:
+        review_required = not control_tested
+    return {
+        "evidence_available": bool(evidence_available),
+        "control_tested": bool(control_tested),
+        "test_date": test_date,
+        "test_evidence": test_evidence,
+        "owner": owner,
+        "assurance_level": assurance_level,
+        "review_required": bool(review_required),
+    }
 
 
 def format_drift_monitoring_section(
@@ -37,7 +74,7 @@ def format_drift_monitoring_section(
             logger.warning("Could not read drift evidence %s: %s", evidence_path, exc)
 
     if not payload:
-        return {
+        base = {
             "status": "Not Evaluated",
             "overall_status": "not_evaluated",
             "monitoring_passed": None,
@@ -48,28 +85,53 @@ def format_drift_monitoring_section(
                 "Run: python run_production_monitor.py"
             ),
         }
+        base.update(
+            build_assurance_fields(
+                evidence_available=False,
+                control_tested=False,
+                test_evidence=str(evidence_path),
+                owner="monitoring-owner",
+                assurance_level="none",
+                review_required=True,
+            )
+        )
+        return base
 
     drift_report = payload.get("drift_report", payload)
     overall = drift_report.get("overall_status", "unknown")
     monitoring_passed = payload.get("monitoring_passed")
     if monitoring_passed is None:
         monitoring_passed = overall == "healthy"
+    last_monitored = payload.get("saved_at") or drift_report.get("monitoring_date")
 
-    return {
+    result = {
         "status": "evidence_available" if monitoring_passed else "review_required",
         "overall_status": overall,
         "monitoring_passed": bool(monitoring_passed),
         "evidence_file": str(evidence_path),
         "monitoring_module": "src.monitoring.production_compliance_gate",
-        "last_monitored_at": payload.get("saved_at") or drift_report.get("monitoring_date"),
+        "last_monitored_at": last_monitored,
         "data_drift_detected": drift_report.get("data_drift", {}).get("drift_detected"),
         "model_drift_detected": drift_report.get("model_drift", {}).get("drift_detected"),
         "alerts": drift_report.get("alerts", []),
         "summary": (
             "Evaluated continuously via production_compliance_gate. "
-            f"See {evidence_path.name} for current status."
+            f"See {evidence_path.name} for current status. "
+            "Tile status is evidence language — not a conformity decision."
         ),
     }
+    result.update(
+        build_assurance_fields(
+            evidence_available=True,
+            control_tested=True,
+            test_date=last_monitored,
+            test_evidence=str(evidence_path),
+            owner="monitoring-owner",
+            assurance_level="tested" if monitoring_passed else "evidence_only",
+            review_required=not bool(monitoring_passed),
+        )
+    )
+    return result
 
 
 def generate_unified_ai_report(
@@ -108,9 +170,34 @@ def generate_unified_ai_report(
     drift_monitoring_results = drift_monitoring_results or {}
     validation_results = validation_results or {}
 
+    generated_at = datetime.now().isoformat()
+    explainability_present = bool(explainability_report)
+    bias_present = bool(bias_audit_results)
+    robustness_present = bool(validation_results)
+
     report = {
+        "schema_version": SCHEMA_VERSION,
+        "disclaimer": {
+            "status": "technical_evidence_pack",
+            "not_a_conformity_decision": True,
+            "text": (
+                "Dashboard tiles and evidence_status fields are technical labels only. "
+                "They are not an AEPD filing, GDPR certification, or EU AI Act Art. 43 decision. "
+                f"See {ASSURANCE_MODEL_REF}."
+            ),
+        },
+        "assurance": {
+            "model_ref": ASSURANCE_MODEL_REF,
+            "dashboard_tiles_are_not_conformity": True,
+            "overall_assurance_level": "evidence_only",
+            "layers": {
+                "evidence_present": "Artifact exists and is readable",
+                "control_effective": "Control tested with date + evidence pointer",
+                "assurance_level": "none | evidence_only | tested | independently_reviewed",
+            },
+        },
         "report_metadata": {
-            "generated_at": datetime.now().isoformat(),
+            "generated_at": generated_at,
             "document_type": "Unified AI Report",
             "compliance_standards": [
                 "Solvency II (EU Insurance Regulation)",
@@ -171,8 +258,16 @@ def generate_unified_ai_report(
             "local_explanations": "Available",
             "feature_interactions": "Available",
             "explainability_method": "Native EBM glass-box explainability (InterpretML)",
-            "evidence_status": "evidence_available" if explainability_report else "not_assessed",
+            "evidence_status": "evidence_available" if explainability_present else "not_assessed",
+            "compliance_status": "not_a_conformity_decision",
             "summary": explainability_report.get("compliance_notes", {}),
+            **build_assurance_fields(
+                evidence_available=explainability_present,
+                control_tested=explainability_present,
+                test_date=generated_at if explainability_present else None,
+                test_evidence="pages/03_Explainability.py" if explainability_present else None,
+                owner="model-owner",
+            ),
         },
         "solvency_ii_compliance": {
             "risk_management": "Model explainability enables risk assessment",
@@ -180,6 +275,13 @@ def generate_unified_ai_report(
             "validation": "Model performance validated on test set",
             "evidence_status": "review_required",
             "compliance_status": "not_a_conformity_decision",
+            **build_assurance_fields(
+                evidence_available=True,
+                control_tested=False,
+                owner="risk-function",
+                assurance_level="evidence_only",
+                review_required=True,
+            ),
         },
         "eu_ai_act_compliance": {
             "risk_category": "conditional — Annex III 5(c) is life/health, not all insurance",
@@ -188,6 +290,13 @@ def generate_unified_ai_report(
             "accuracy_robustness": f"ROC-AUC: {performance_metrics.get('roc_auc', 0.0):.4f}",
             "evidence_status": "conditional",
             "compliance_status": "not_a_conformity_decision",
+            **build_assurance_fields(
+                evidence_available=True,
+                control_tested=False,
+                owner="compliance-owner",
+                assurance_level="evidence_only",
+                review_required=True,
+            ),
         },
         "responsible_ai_compliance": {
             "fairness": bias_audit_results or "Not Evaluated",
@@ -198,12 +307,22 @@ def generate_unified_ai_report(
             "drift_monitoring": format_drift_monitoring_section(drift_monitoring_results),
             "evidence_status": "review_required",
             "compliance_status": "not_a_conformity_decision",
+            **build_assurance_fields(
+                evidence_available=bias_present or robustness_present,
+                control_tested=bias_present,
+                test_date=generated_at if bias_present else None,
+                test_evidence="docs/audit_results.json" if bias_present else None,
+                owner="responsible-ai-owner",
+                assurance_level="tested" if bias_present else "evidence_only",
+                review_required=True,
+            ),
         },
         "recommendations": [
             "Monitor model performance in production",
             "Regular retraining with updated data",
             "Maintain explainability reports for audits",
             "Document model decisions for regulatory compliance",
+            "Treat dashboard tiles as evidence present — not a conformity decision",
         ],
     }
 

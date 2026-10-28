@@ -1,7 +1,12 @@
 # Porto Seguro — Responsible AI Compliance Hub
 
-> **Production-oriented Responsible AI vendor-agnostic reference architecture** for highly regulated industries. Designed to support technical due diligence and AI governance assessments under the **EU AI Act** and **Solvency II** frameworks.  
-> **Not** an AEPD filing, GDPR certification, or EU AI Act conformity decision. Hold-out metrics alone do not prove regulatory compliance.
+> **Production-oriented Responsible AI vendor-agnostic reference architecture** for highly regulated industries. Designed to support technical due diligence and AI governance assessments under the **EU AI Act** and **Solvency II** frameworks.
+>
+> **Dataset:** anonymized Kaggle Porto Seguro Safe Driver Prediction (`ps_*`, 595,212 rows) — **not** a live insurance book or identifiable policyholders.
+>
+> **Not** an AEPD filing, a signed EIPD, GDPR certification, an EU AI Act conformity decision, or an Art. 36 prior consultation. Hold-out metrics and demo packs are technical evidence; they do not prove regulatory compliance.
+
+**Repo:** [tshapedconsultant/porto-seguro-compliance-hub](https://github.com/tshapedconsultant/porto-seguro-compliance-hub) · **site:** [tshapedconsultant.com](https://tshapedconsultant.com/#projects) · [ES](https://tshapedconsultant.com/es/#projects)
 
 ## Executive Architecture
 
@@ -11,7 +16,7 @@ Single-stack view for C-suite, compliance, and risk committees — five layers, 
 flowchart TB
     subgraph DATA["① DATA LAYER"]
         direction LR
-        D1["Porto Seguro · 595K policies"]
+        D1["Kaggle Porto Seguro · 595K anonymized rows"]
         D2["Polars ingestion & validation"]
         D3["Art. 10 — dataset traceability"]
     end
@@ -67,9 +72,25 @@ flowchart TB
 |---------|----------------|-------------------|
 | **Streamlit Model Card** | `streamlit run app.py` → `:8501` | Starts on a clean clone **without** `train.csv` / `.pkl` |
 | **DPIA / EIPD page** | Sidebar **DPIA GDPR** | Static pack `gdpr_dpia_v1.json` + optional workspace under `src/governance/dpia_workspace/` (assessments **not** published) |
+| **Governed Decision Demo** | Sidebar **Governed Decision Demo** (`pages/09_…`) | Control-room walkthrough: DENY / HITL ticket / redact / local hash chain. `?lang=en\|es` |
+| **AEPD EIPD Demo (~90s)** | Sidebar **AEPD EIPD Demo** (`pages/10_…`) | EIPD narrative: processing → rights risk → control → evidence → residual. Dataset is **anonymized Kaggle** (595,212 rows), not a live insurance book |
+| **Recorded walkthroughs** | `record_demo.bat` · `record_demo.bat --es` · `record_demo.bat --aepd` | ffmpeg desktop + muxed VO (Edge fullscreen, Cursor minimized). **Not** Xbox Game Bar. Outputs under `%USERPROFILE%\Videos\Captures\` |
 | **Inference API** | `python api_server.py` → `:8000` | `/predict` & `/batch_predict` wrapped by `execute_guarded` **in-process**; needs local artifacts for healthy inference |
 | **ML pipeline** | `run_training.py` / `run_training_full.py` | Polars → feature engineering → EBM → explainability → monitoring; needs Kaggle `train.csv` locally |
-| **CI governance job** | `.github/workflows/ci.yml` | Governance + evidence-schema + synthetic robustness; optional ML suite `continue-on-error` |
+| **CI governance job** | `.github/workflows/ci.yml` | Job `tests` (mandatory on every push/PR): control-plane + API security. Job `ml-synthetic` only on ML path changes, weekly cron, or `workflow_dispatch` — **no** `continue-on-error`; if that job runs and fails, the workflow fails |
+
+### Walkthroughs (two cuts)
+
+Technical evidence for lab / stakeholder review. **Not** a signed EIPD and **not** an Art. 36 filing.
+
+| Cut | Page | How to record | What it shows | Published |
+|-----|------|---------------|---------------|-----------|
+| **AEPD EIPD (~90 s, Castilian)** | `pages/10_AEPD_EIPD_Demo.py` → `/AEPD_EIPD_Demo` | `record_demo.bat --aepd` | EIPD as the story: identify the processing (Kaggle, anonymized) → necessity and risks to rights → a live control (DENY before the model, single-use HITL ticket, fail-closed redact) → inspect the local hash chain → residual scores *estimated pending verification* → limits | [Spanish site · 05](https://tshapedconsultant.com/es/#projects) (`porto-seguro-aepd-es.mp4`) |
+| **Control room (~2:20)** | `pages/09_Governed_Decision_Demo.py` → `/Governed_Decision_Demo` | `record_demo.bat` (EN) · `record_demo.bat --es` | Runtime evidence: policy DENY (model never invoked) → bound single-use approval → anti-replay → redact → `verify_chain()` → clumsy JSONL rewrite detected. Local hash chain ≠ WORM | [English site · 05](https://tshapedconsultant.com/#projects) (`porto-seguro-governed-en.mp4`); ES control-room cut on the Spanish card |
+
+Capture is `docs/governance/auto_record_demo.py`: Edge fullscreen, Cursor minimized, ffmpeg `gdigrab`, continuous ElevenLabs VO muxed into the MP4. Xbox Game Bar is **not** used (it captured the IDE and dropped audio).
+
+Playbooks: [`DEMO_PLAYBOOK.md`](docs/governance/DEMO_PLAYBOOK.md) (ES, AEPD-facing) · [`DEMO_PLAYBOOK_EN.md`](docs/governance/DEMO_PLAYBOOK_EN.md).
 
 ### Control plane limits (honest scope)
 
@@ -79,6 +100,9 @@ flowchart TB
 - Unclassified actions → **default-deny**; nested REDACT failures → fail-closed.
 - Application calendar (Art. 113 after **2026/1744**): general application **2026-08-02**; Annex III high-risk duties **2027-12-02** — see `src/control_plane/regulatory_library.py` (encoded dates, not a live EUR-Lex fetch).
 - **No GDPR / EU AI Act certification** — evidence packs and UI are lab artefacts, not AEPD / notified-body conformity.
+- **Demo data ≠ live book** — Kaggle Porto Seguro Safe Driver Prediction (`ps_*`, 595,212 anonymized rows). Controller / DPO sign-off in the EIPD pack are **hypothetical / pending**.
+- **Residual scores** in `gdpr_dpia_v1.json` are **estimated pending verification**. Human review remains required. A local hash chain is **not** immutable external audit storage.
+- **Not an Art. 36 filing** — the EIPD pack and AEPD demo are a technical reference for evaluation, not a supervisory notification or prior consultation.
 
 ### What this still is not
 
@@ -97,13 +121,13 @@ See **What this still is not** above. Additional IP trust note:
 
 - **TRUST_PROXY / client IP** — `X-Forwarded-For` is spoofable unless the immediate TCP peer is allowlisted via `TRUSTED_PROXY_IPS` / `TRUSTED_PROXY_CIDRS`. If `TRUST_PROXY=true` with an empty allowlist, XFF is **ignored** (fail closed). When the peer is trusted, the **leftmost** XFF hop is used (single reverse-proxy pattern).
 
-### Threat & assurance docs
+### Governance & assurance docs
 
-- [`docs/THREAT_MODEL.md`](docs/THREAT_MODEL.md) — STRIDE + trust boundaries for this stack
-- [`docs/ASSURANCE_MODEL.md`](docs/ASSURANCE_MODEL.md) — evidence present ≠ control effective ≠ conformity
-- [`docs/governance/DEMO_PLAYBOOK.md`](docs/governance/DEMO_PLAYBOOK.md) — ES (AEPD-facing): sequence + ticket lifecycle + 90‑s DENY/approval/REDACT/audit + 15‑s tamper demo (technical evidence; not certification)
+- [`docs/governance/LINE_REPORT.md`](docs/governance/LINE_REPORT.md) — Bottom-up operator facts, test coverage, and assurance boundaries
+- [`docs/ROADMAP_V2.md`](docs/ROADMAP_V2.md) — Plan to make this a deployable service (phases 0–8). **Not implemented.** Does not claim conformity
+- [`docs/governance/DEMO_PLAYBOOK.md`](docs/governance/DEMO_PLAYBOOK.md) — ES (AEPD-facing): EIPD 90‑s cut + control-room sequence + ticket lifecycle (technical evidence; not certification)
 - [`docs/governance/DEMO_PLAYBOOK_EN.md`](docs/governance/DEMO_PLAYBOOK_EN.md) — English mirror of the demo playbook
-- Synthetic packs: [`examples/evidence/`](examples/evidence/) + schemas in [`docs/schemas/`](docs/schemas/)
+- Conformity packs (demo artefacts): [`eu_ai_act_conformity_v1.json`](eu_ai_act_conformity_v1.json) · [`gdpr_dpia_v1.json`](gdpr_dpia_v1.json)
 
 ### Threat & Governance Scope
 
@@ -122,8 +146,13 @@ See **What this still is not** above. Additional IP trust note:
 - Agentic AI runtime controls
 - LLM security threats
 - Supply-chain security
+- Formal EIPD submission / AEPD Art. 36 prior consultation
+- Processing a live insurance book or identifiable policyholders
+- WORM / Object Lock / KMS-signed audit (local JSONL + checkpoint only)
 
 ### Roadmap to production (P0 — not implemented here)
+
+Short list. Full service roadmap (identity, shared state, durable evidence, ops, pilot): [`docs/ROADMAP_V2.md`](docs/ROADMAP_V2.md). Shipping that document does **not** close the gaps.
 
 | Gap | Honest status | Next concrete step |
 |-----|---------------|--------------------|
@@ -132,7 +161,9 @@ See **What this still is not** above. Additional IP trust note:
 | Immutable audit | JSONL + checkpoint + optional HMAC (not KMS) | S3 Object Lock / WORM + KMS + independent verify |
 | Approval authority | Mutable JSON + audit desync check | Postgres/Redis transactions + append-only audit |
 | Multi-replica rate limit | In-memory demo limiter | Gateway rate limit; no Redis backend here |
-| Evidence vs effectiveness | Fields + assurance docs shipped | Operational owners + scheduled control tests |
+| Evidence vs effectiveness | Assurance fields on JSON packs | Operational owners + scheduled control tests |
+| Live book + signed EIPD | Kaggle `ps_*`; DPO sign-off hypothetical | Separate processing; unsigned workspace must not enable live `/predict` |
+| Artifact pin | SHA-256 sidecars; `REQUIRE_ARTIFACT_HASH` off by default | Default **on** in a production profile |
 
 ---
 
@@ -146,6 +177,8 @@ See **What this still is not** above. Additional IP trust note:
 |---------|---------|-----|
 | **Model Card Dashboard** | `streamlit run app.py` | `http://localhost:8501` |
 | **DPIA / EIPD (GDPR Art. 35)** | sidebar **DPIA GDPR** | `http://localhost:8501` |
+| **Governed Decision Demo** | sidebar page 09 · `record_demo.bat` | `http://localhost:8501/Governed_Decision_Demo` |
+| **AEPD EIPD 90s Demo** | sidebar page 10 · `record_demo.bat --aepd` | `http://localhost:8501/AEPD_EIPD_Demo` |
 | **Inference API Gateway** | `python api_server.py` | `http://localhost:8000` |
 | **Compliance Monitor** | `POST /compliance/monitor` | `http://localhost:8000/compliance/monitor` |
 
@@ -195,7 +228,6 @@ The architecture materializes audit logs into evidence packs for the dashboard. 
 | `docs/robustness_results.json` | Adversarial red teaming and noise tests (Art. 15) |
 | `eu_ai_act_conformity_v1.json` | Exportable evidence pack (demo; **not** a completed Art. 43 procedure); `schema_version` + assurance fields |
 | `gdpr_dpia_v1.json` | GDPR Art. 35 DPIA / EIPD pack (AEPD innovation-lab walkthrough; not a supervisory filing) |
-| `examples/evidence/*_synthetic.json` | Minimal synthetic packs (no Kaggle CSV); schema-validated in CI |
 | `training_results.json` | Hold-out metrics + optimal threshold parameters (local) |
 | `monitoring/performance_history.json` | Production ROC-AUC historical logs (local) |
 
@@ -252,6 +284,7 @@ Proxy-based bias audits when sensitive demographics cannot be collected under pr
 porto-seguro/
 ├── app.py                          # Streamlit Model Card entrypoint
 ├── api_server.py                   # FastAPI + execute_guarded predict
+├── record_demo.bat                 # Auto walkthrough (ffmpeg + VO; --es / --aepd)
 ├── run_training.py                 # MLOps pipeline (needs train.csv)
 ├── run_training_full.py / quick    # Full / quick training variants
 ├── run_production_monitor.py       # Recurring Art. 9 monitor
@@ -263,7 +296,13 @@ porto-seguro/
 │   ├── governance/                 # Bias audit, EIPD workspace, reporting
 │   ├── control_plane/              # Policies, approvals, runtime adapter
 │   └── monitoring/                 # Drift, production gate, tracker
-├── pages/                          # Overview, Performance, Compliance, DPIA…
+├── pages/
+│   ├── 09_Governed_Decision_Demo.py
+│   └── 10_AEPD_EIPD_Demo.py        # EIPD ~90 s narrative (not Art. 36)
+├── docs/governance/
+│   ├── DEMO_PLAYBOOK.md            # ES, AEPD-facing
+│   ├── auto_record_demo.py         # ffmpeg gdigrab + muxed VO
+│   └── demo_assets/                # architecture / lifecycle / hash-chain diagrams
 ├── tests/                          # Governance CI + optional ML unit tests
 └── models/artifacts/               # Model, FE, threshold, SHA-256 (gitignored)
 ```
@@ -279,11 +318,13 @@ Demo playbook (Mermaid + scripts): [`docs/governance/DEMO_PLAYBOOK.md`](docs/gov
 
 ```bash
 pip install -r requirements_streamlit.txt -r requirements_api.txt
-pip install pytest pandas numpy jsonschema scikit-learn
-python -m pytest tests/test_dpia_workspace.py tests/test_control_plane.py tests/test_import_surface.py tests/test_evidence_schemas.py -q
-python -m pytest tests/test_synthetic_robustness.py -q
+pip install pytest pandas numpy
+# Same as CI job `tests` (governance + API security). Does not train; does not need train.csv.
+python -m pytest tests/test_dpia_workspace.py tests/test_control_plane.py tests/test_control_plane_security.py tests/test_api_security.py tests/test_import_surface.py -q
 streamlit run app.py
 ```
+
+Job `ml-synthetic` (path filter, Sunday 06:00 UTC, or Actions → Run workflow) is **not** the command above. It installs `requirements-ml.lock` (or `requirements-ml.txt`) and runs the EBM/FE/drift/robustness suite. There is no `continue-on-error`.
 
 A clean clone starts the Model Card, DPIA and EU AI Act pages without `train.csv` or `.pkl` artifacts (gitignored). Full training still needs the Kaggle file locally. `/predict` is wrapped by `execute_guarded` **in-process only**.
 
@@ -330,8 +371,10 @@ python api_server.py
 
 This project is a **production-oriented Responsible AI reference architecture** for regulated industries — designed to support technical due diligence and AI governance assessments from compliance, actuarial, and cybersecurity stakeholders.
 
-- **Demo:** `streamlit run app.py` — walk through the Compliance Hub live
-- **Evidence pack:** `eu_ai_act_conformity_v1.json` (technical evidence; not a conformity certificate)
+- **Live hub:** `streamlit run app.py` — Model Card, DPIA, EU AI Act, governed decision, AEPD EIPD
+- **Walkthroughs:** [EN control room](https://tshapedconsultant.com/#projects) · [ES AEPD ~90 s](https://tshapedconsultant.com/es/#projects) (technical evidence; not a filing)
+- **Evidence packs:** `eu_ai_act_conformity_v1.json` (not Art. 43) · `gdpr_dpia_v1.json` (residuals *estimated pending verification*; not Art. 36)
+- **V2 service roadmap:** [`docs/ROADMAP_V2.md`](docs/ROADMAP_V2.md) (plan only; not a claim the gaps are closed)
 - **Contact:** [Andrés Lage Freire on LinkedIn](https://www.linkedin.com/in/andres-lage-freire-4562a91b1) · open an issue in this repository
 
 ---

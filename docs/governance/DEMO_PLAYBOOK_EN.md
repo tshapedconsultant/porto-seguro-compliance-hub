@@ -5,6 +5,14 @@
 
 **Español (primary, AEPD-facing):** [`DEMO_PLAYBOOK.md`](DEMO_PLAYBOOK.md).
 
+**AEPD ~90 s recording (EIPD as the narrative):**  
+Streamlit page **10 · AEPD EIPD Demo** · `record_demo.bat --aepd` · Castilian voice.  
+Sequence: anonymized Kaggle dataset scope → EIPD purpose/necessity/risks → DENY / HITL / redact → hash chain and local tamper → risk register (residuals *estimated pending verification*) → limits (not a formal EIPD, not Art. 36).
+
+**~2:20 recording (control room):**  
+[`DEMO_RECORDING_220.md`](DEMO_RECORDING_220.md) · [`record_demo.bat`](../../record_demo.bat) · page **09 · Governed Decision Demo** · evidence `demo_90s.py`.  
+Capture: ffmpeg desktop (Edge fullscreen; Cursor minimized). Not certification.
+
 **Honest scope (current code):**
 
 - Enforcement only for actions that pass through `ReferenceRuntime.execute_guarded` **in this process**.

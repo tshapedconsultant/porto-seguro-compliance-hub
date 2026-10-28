@@ -1,5 +1,12 @@
 {
+  "schema_version": "1.1.0",
   "document_type": "DPIA / EIPD",
+  "assurance": {
+    "model_ref": "docs/ASSURANCE_MODEL.md",
+    "dashboard_tiles_are_not_conformity": true,
+    "overall_assurance_level": "evidence_only",
+    "residual_scores_status": "estimated_pending_verification"
+  },
   "legal_framework": [
     "Regulation (EU) 2016/679 (GDPR / RGPD)",
     "Article 35 GDPR — Data Protection Impact Assessment",

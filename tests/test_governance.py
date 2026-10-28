@@ -57,6 +57,10 @@ def test_generate_compliance_report():
     assert "responsible_ai_compliance" in report
     assert "recommendations" in report
     assert report["eu_ai_act_compliance"]["compliance_status"] == "not_a_conformity_decision"
+    assert report["schema_version"] == "1.1.0"
+    assert report["assurance"]["dashboard_tiles_are_not_conformity"] is True
+    assert "control_tested" in report["eu_ai_act_compliance"]
+    assert "assurance_level" in report["explainability_compliance"]
 
 
 def test_generate_compliance_report_with_file():

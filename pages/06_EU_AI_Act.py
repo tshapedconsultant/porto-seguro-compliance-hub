@@ -12,6 +12,11 @@ from utils.control_plane_notice import CONTROL_PLANE_BANNER
 
 st.title("⚖️ EU AI Act - Article-by-Article Mapping")
 st.warning(CONTROL_PLANE_BANNER)
+st.info(
+    "Dashboard tiles show **evidence present**, not a conformity decision. "
+    "See `docs/ASSURANCE_MODEL.md` (evidence vs control effective vs assurance level) "
+    "and `docs/THREAT_MODEL.md`."
+)
 st.markdown(
     "This scoring demo **may** fall under high-risk duties **if** it is used for "
     "insurance risk assessment and pricing in life and health insurance within "
@@ -136,8 +141,9 @@ crosswalk = [
 st.table(crosswalk)
 
 st.caption(
-    "Mapping is illustrative. Production compliance requires legal review and "
-    "Article 43 conformity assessment by accredited body."
+    "Mapping is illustrative. Production requires legal review and the applicable "
+    "Art. 43 conformity path — not automatically a notified-body certificate. "
+    "Tiles ≠ conformity (`docs/ASSURANCE_MODEL.md`)."
 )
 
 st.header("Crosswalk: EU AI Act <> GDPR (EIPD)")

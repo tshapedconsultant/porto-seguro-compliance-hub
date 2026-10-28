@@ -18,21 +18,19 @@ Hechos en disco, no intenciones.
 | Model Card | `app.py` + `pages/*` | Arranca sin `train.csv` / `.pkl` (artefactos gitignored) |
 | API predicción | `api_server.py` `/predict` y `/batch_predict` | Pasan por `execute_guarded` **en este proceso**; rate limit in-memory demo; TRUST_PROXY con allowlist |
 | Pipeline ML | `src/data_processing/` → `src/models/` → `src/monitoring/` | Polars → FE → EBM → explainability → gate; scripts `run_training*.py` |
-| Tests de borde | `tests/test_dpia_workspace.py`, `tests/test_control_plane.py`, `tests/test_import_surface.py` | CI instala Streamlit + API (`polars`/`joblib`); REDACT anidado fail-closed; hash EIPD; Annex III **2027-12-02** (tras 2026/1744) |
+| Tests de borde | `tests/test_dpia_workspace.py`, `tests/test_control_plane.py`, `tests/test_control_plane_security.py`, `tests/test_api_security.py`, `tests/test_import_surface.py` | Mismos ficheros que el job CI `tests`; Streamlit + API (`polars`/`joblib`); REDACT anidado fail-closed; Annex III **2027-12-02** (tras 2026/1744) |
 | Tests ML (opcionales) | `tests/test_*` data/EBM/drift/explainability | En repo; skip si faltan `polars`/`interpret`; **no** son el job CI de gobernanza |
 | Persistencia EIPD | `docs/governance/assessments/*.json` | Local; **no** se publica en GitHub |
 | Auditoría control plane | JSONL append-only + hash + checkpoint local | No es WORM; el fichero se puede reescribir |
-| Threat / assurance | `docs/THREAT_MODEL.md`, `docs/ASSURANCE_MODEL.md` | Presentes; tiles ≠ conformidad |
-| Packs sintéticos | `examples/evidence/` + `docs/schemas/` | CI valida con jsonschema |
-| Robustez sintética | `tests/test_synthetic_robustness.py` | Sin `train.csv` |
+| Threat / assurance | Packs raíz `eu_ai_act_conformity_v1.json`, `gdpr_dpia_v1.json` | Tiles ≠ conformidad. `docs/THREAT_MODEL.md` / `ASSURANCE_MODEL.md` / `examples/evidence/` **no** están en el árbol publicado (allowlist `.gitignore`) |
+| Robustez sintética | `tests/test_synthetic_robustness.py` | Job CI `ml-synthetic` (filtro de rutas / cron / dispatch), **no** el job `tests` |
 
 Comando de verificación de línea (mismo que CI de gobernanza):
 
 ```bash
 pip install -r requirements_streamlit.txt -r requirements_api.txt
-pip install pytest pandas numpy jsonschema scikit-learn
-python -m pytest tests/test_dpia_workspace.py tests/test_control_plane.py tests/test_control_plane_security.py tests/test_api_security.py tests/test_import_surface.py tests/test_evidence_schemas.py -q
-python -m pytest tests/test_synthetic_robustness.py -q
+pip install pytest pandas numpy
+python -m pytest tests/test_dpia_workspace.py tests/test_control_plane.py tests/test_control_plane_security.py tests/test_api_security.py tests/test_import_surface.py -q
 ```
 
 Calendario Art. 113 (codificado, no fetch en vivo a EUR-Lex): `src/control_plane/regulatory_library.py` + fixture `tests/fixtures/ai_act_art113_oj_2024.json`. Hitos relevantes: aplicación general **2026-08-02**; Annex III high-risk **2027-12-02** (Reglamento (UE) 2026/1744).
@@ -114,6 +112,8 @@ Ver **What this still is not** arriba. Nota adicional de confianza de IP:
 
 ### Roadmap producción (P0 — no fingir como hecho)
 
+Detalle y orden de servicio operable: [`docs/ROADMAP_V2.md`](../ROADMAP_V2.md). Publicar ese documento **no** cierra los huecos.
+
 | Hueco | Estado actual | Siguiente paso concreto |
 |---|---|---|
 | Stop / approvals compartidos | In-process; `STOP_FILE` + lease FS opcional | Redis (o equivalente) + documentación |
@@ -121,4 +121,4 @@ Ver **What this still is not** arriba. Nota adicional de confianza de IP:
 | Auditoría inmutable | JSONL + checkpoint + HMAC opcional (no KMS) | Object Lock + KMS + verificación independiente |
 | Autoridad de aprobaciones | JSON mutable + chequeo desync | Postgres/Redis + audit append-only |
 | Rate limit multi-réplica | Limitador in-memory de demo | Límite en gateway; sin Redis aquí |
-| Evidencia vs efectividad | Campos + `ASSURANCE_MODEL.md` | Owners operativos + tests de control calendados |
+| Evidencia vs efectividad | Campos de assurance en packs JSON | Owners operativos + tests de control calendados |

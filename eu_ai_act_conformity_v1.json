@@ -1,4 +1,15 @@
 {
+  "schema_version": "1.1.0",
+  "disclaimer": {
+    "status": "technical_evidence_pack",
+    "not_a_conformity_decision": true,
+    "text": "Technical evidence labels only. Not an AEPD filing, GDPR certification, or Art. 43 conformity decision. See docs/ASSURANCE_MODEL.md."
+  },
+  "assurance": {
+    "model_ref": "docs/ASSURANCE_MODEL.md",
+    "dashboard_tiles_are_not_conformity": true,
+    "overall_assurance_level": "evidence_only"
+  },
   "report_metadata": {
     "generated_at": "2026-06-09T12:11:43.937558",
     "document_type": "Unified AI Report",
@@ -87,7 +98,14 @@
     "human_oversight": "Model supports human-in-the-loop decisions",
     "accuracy_robustness": "ROC-AUC: 0.6391",
     "evidence_status": "conditional",
-    "compliance_status": "not_a_conformity_decision"
+    "compliance_status": "not_a_conformity_decision",
+    "evidence_available": true,
+    "control_tested": false,
+    "test_date": null,
+    "test_evidence": null,
+    "owner": "compliance-owner",
+    "assurance_level": "evidence_only",
+    "review_required": true
   },
   "responsible_ai_compliance": {
     "fairness": {

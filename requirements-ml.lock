@@ -151,6 +151,8 @@ ptyprocess==0.7.0
     # via pexpect
 pure-eval==0.2.4
     # via stack-data
+pyarrow==22.0.0
+    # via -r requirements-ml.txt
 pydantic==2.14.1
     # via dash
 pydantic-core==2.50.1

@@ -8,6 +8,8 @@
 # Install loose: pip install -r requirements-ml.txt
 
 polars>=1.0,<2
+# Polars DataFrame.to_pandas() (EBM bridge in src/models/interpret_bridge.py) requires pyarrow.
+pyarrow>=14,<23
 interpret>=0.4.0,<0.8
 numpy>=1.24,<3
 scikit-learn>=1.3,<2

@@ -11,7 +11,8 @@ Hechos en disco, no intenciones.
 
 | Pieza | Ruta | Estado |
 |---|---|---|
-| Pack EIPD estático | `gdpr_dpia_v1.json` | Presente (demo / laboratorio; no es expediente AEPD) |
+| Pack EIPD estático | `gdpr_dpia_v1.json` | Presente (demo / laboratorio; no es expediente AEPD); bloque `gdpr` generado, no es determinación jurídica |
+| Bloque GDPR auditable | `src/governance/gdpr_evidence.py` + `docs/schemas/gdpr_evidence.schema.json` | Evidencia técnica; `assurance_level=evidence_only`; `review_required=true` |
 | Motor EIPD (workspace) | `src/governance/dpia_workspace/` | Código presente; assessments en `docs/governance/assessments/` **locales, no publicadas** |
 | Motor de políticas | `src/control_plane/` | Código presente; singleton **por proceso**; auditoría JSONL **no** WORM/KMS; **no** SSO/OIDC; `STOP_FILE` + lease FS opcionales |
 | Página Streamlit pack | `pages/08_DPIA_GDPR.py` | Pack JSON + descarga; copy AEPD en español |
@@ -22,7 +23,7 @@ Hechos en disco, no intenciones.
 | Tests ML (opcionales) | `tests/test_*` data/EBM/drift/explainability | En repo; skip si faltan `polars`/`interpret`; **no** son el job CI de gobernanza |
 | Persistencia EIPD | `docs/governance/assessments/*.json` | Local; **no** se publica en GitHub |
 | Auditoría control plane | JSONL append-only + hash + checkpoint local | No es WORM; el fichero se puede reescribir |
-| Threat / assurance | Packs raíz `eu_ai_act_conformity_v1.json`, `gdpr_dpia_v1.json` | Tiles ≠ conformidad. `docs/THREAT_MODEL.md` / `ASSURANCE_MODEL.md` / `examples/evidence/` **no** están en el árbol publicado (allowlist `.gitignore`) |
+| Threat / assurance | Packs raíz `eu_ai_act_conformity_v1.json`, `gdpr_dpia_v1.json` | Tiles ≠ conformidad. `docs/THREAT_MODEL.md` / `ASSURANCE_MODEL.md` / `examples/evidence/` **no** están en el árbol publicado; `docs/schemas/gdpr_evidence.schema.json` sí |
 | Robustez sintética | `tests/test_synthetic_robustness.py` | Job CI `ml-synthetic` (filtro de rutas / cron / dispatch), **no** el job `tests` |
 
 Comando de verificación de línea (mismo que CI de gobernanza):
@@ -30,7 +31,7 @@ Comando de verificación de línea (mismo que CI de gobernanza):
 ```bash
 pip install -r requirements_streamlit.txt -r requirements_api.txt
 pip install pytest pandas numpy
-python -m pytest tests/test_dpia_workspace.py tests/test_control_plane.py tests/test_control_plane_security.py tests/test_api_security.py tests/test_import_surface.py -q
+python -m pytest tests/test_dpia_workspace.py tests/test_control_plane.py tests/test_control_plane_security.py tests/test_api_security.py tests/test_import_surface.py tests/test_gdpr_evidence.py -q
 ```
 
 Calendario Art. 113 (codificado, no fetch en vivo a EUR-Lex): `src/control_plane/regulatory_library.py` + fixture `tests/fixtures/ai_act_art113_oj_2024.json`. Hitos relevantes: aplicación general **2026-08-02**; Annex III high-risk **2027-12-02** (Reglamento (UE) 2026/1744).

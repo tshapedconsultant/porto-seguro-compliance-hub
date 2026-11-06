@@ -61,6 +61,9 @@ def test_generate_compliance_report():
     assert report["assurance"]["dashboard_tiles_are_not_conformity"] is True
     assert "control_tested" in report["eu_ai_act_compliance"]
     assert "assurance_level" in report["explainability_compliance"]
+    assert report["gdpr"]["compliance_status"] == "not_a_legal_determination"
+    assert report["gdpr"]["review_required"] is True
+    assert report["gdpr"]["evaluations"]["purposes_and_lawful_basis"]["findings"]["art6_lawful_basis"] == "unknown"
 
 
 def test_generate_compliance_report_with_file():

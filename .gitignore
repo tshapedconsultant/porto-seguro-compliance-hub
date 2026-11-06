@@ -56,8 +56,11 @@ models/artifacts/quick/
 !docs/
 !docs/ROADMAP_V2.md
 !docs/V2_ROADMAP.md
+!docs/schemas/
+!docs/schemas/gdpr_evidence.schema.json
 !docs/governance/
 !docs/governance/LINE_REPORT.md
+!docs/governance/GDPR_EVIDENCE.md
 !docs/governance/DEMO_PLAYBOOK.md
 !docs/governance/DEMO_*.md
 !docs/governance/INCIDENT_*.md

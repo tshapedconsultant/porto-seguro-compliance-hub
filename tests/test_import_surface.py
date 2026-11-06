@@ -10,9 +10,11 @@ def test_data_loaders_import():
 def test_control_plane_import():
     from src.control_plane.runtime import execute_guarded
     from src.governance.dpia_workspace.store import AssessmentStore
+    from src.governance.gdpr_evidence import build_gdpr_evidence_block
 
     assert callable(execute_guarded)
     assert AssessmentStore is not None
+    assert callable(build_gdpr_evidence_block)
 
 
 def test_api_server_imports_without_artifacts():

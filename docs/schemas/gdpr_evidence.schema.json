@@ -1,0 +1,112 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://porto-seguro.local/schemas/gdpr_evidence.schema.json",
+  "title": "Porto Seguro GDPR evidence block",
+  "description": "Technical GDPR assessment block. Not a legal determination or certification. Additive to unified reports at schema_version 1.1.0.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "assessment_context",
+    "generated_at",
+    "assurance_level",
+    "compliance_status",
+    "review_required",
+    "open_gaps",
+    "evaluations"
+  ],
+  "properties": {
+    "schema_version": { "const": "1.0.0" },
+    "assessment_context": { "type": "object" },
+    "generated_at": {
+      "type": "string",
+      "description": "UTC timestamp with timezone offset"
+    },
+    "assurance_level": { "const": "evidence_only" },
+    "compliance_status": { "const": "not_a_legal_determination" },
+    "review_required": { "type": "boolean" },
+    "open_gaps": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["section", "gap"],
+        "properties": {
+          "section": { "type": "string" },
+          "gap": { "type": "string" }
+        }
+      }
+    },
+    "evaluations": {
+      "type": "object",
+      "required": [
+        "applicability_and_anonymisation",
+        "roles_and_accountability",
+        "purposes_and_lawful_basis",
+        "data_inventory_and_minimisation",
+        "transparency",
+        "data_subject_rights",
+        "automated_decision_making",
+        "privacy_by_design_and_default",
+        "security_of_processing",
+        "retention_and_deletion",
+        "dpia",
+        "processors_and_transfers",
+        "records_and_incident_response"
+      ],
+      "additionalProperties": { "$ref": "#/definitions/evaluation" }
+    },
+    "legal_sources": { "type": "array" },
+    "limitations": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "pending_legal_or_dpo_decisions": {
+      "type": "array",
+      "items": { "type": "string" }
+    }
+  },
+  "definitions": {
+    "evaluation": {
+      "type": "object",
+      "required": [
+        "legal_reference",
+        "applicability",
+        "applicability_rationale",
+        "evidence_status",
+        "control_status",
+        "evidence_refs",
+        "owner",
+        "reviewed_at",
+        "reviewer",
+        "gaps",
+        "next_actions",
+        "review_required"
+      ],
+      "properties": {
+        "legal_reference": { "type": "string" },
+        "applicability": { "enum": ["unknown", "applicable", "not_applicable"] },
+        "applicability_rationale": { "type": "string", "minLength": 1 },
+        "evidence_status": { "enum": ["missing", "partial", "available"] },
+        "control_status": { "enum": ["not_tested", "passed", "failed", "not_applicable"] },
+        "evidence_refs": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["path", "kind"],
+            "properties": {
+              "path": { "type": "string" },
+              "kind": { "enum": ["document", "test", "code", "config"] }
+            }
+          }
+        },
+        "owner": { "type": ["string", "null"] },
+        "reviewed_at": { "type": ["string", "null"] },
+        "reviewer": { "type": ["string", "null"] },
+        "gaps": { "type": "array", "items": { "type": "string" } },
+        "next_actions": { "type": "array", "items": { "type": "string" } },
+        "review_required": { "type": "boolean" },
+        "findings": { "type": "object" }
+      }
+    }
+  }
+}

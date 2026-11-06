@@ -240,15 +240,22 @@ def build_compliance_status(
     )
 
     demo = bias_audit.get("demographic_parity", {})
-    bias_ok = bias_audit.get("overall_compliance", False)
-    bias_evaluated = demo.get("overall_parity") is not None or demo.get("attribute_tests")
+    assessment = bias_audit.get("overall_assessment")
+    if assessment is None and bias_audit.get("overall_compliance") is True:
+        # Legacy packs used a binary pass; never treat that as a fairness certificate.
+        assessment = "conditional"
+    bias_evaluated = (
+        assessment is not None
+        or demo.get("overall_parity") is not None
+        or demo.get("attribute_tests")
+    )
 
     if not bias_evaluated:
         fairness = "⚠️ Not Audited"
         responsible = "⚠️ Not Audited"
-    elif bias_ok:
-        fairness = "✅ Evidence present"
-        responsible = "✅ Evidence present"
+    elif assessment == "conditional":
+        fairness = "⚠️ Conditional"
+        responsible = "⚠️ Conditional"
     else:
         fairness = "⚠️ Review Required"
         responsible = "⚠️ Review Required"
@@ -320,22 +327,30 @@ def bias_audit_to_dataframe(bias_audit: dict) -> pd.DataFrame:
 
     for attr_name, info in demo.items():
         eq_info = eq.get(attr_name, {})
-        parity_ok = info.get("parity_met", False)
-        eq_ok = eq_info.get("equality_met", False)
+        parity_status = info.get("parity_screening_result") or (
+            "pass" if info.get("parity_met") else "fail"
+        )
+        eq_status = eq_info.get("odds_screening_result") or (
+            "pass" if eq_info.get("equality_met") else "fail"
+        )
+        significant = bool(
+            info.get("statistically_significant") or eq_info.get("statistically_significant")
+        )
         if degenerate:
             status = "⚠️ Invalid (no positive predictions)"
-        elif parity_ok and eq_ok:
-            status = "✅ Pass"
         else:
-            status = "⚠️ Review Required"
+            status = f"{parity_status} / {eq_status}"
+            if significant:
+                status += " · significant"
         rows.append(
             {
                 "Protected Attribute": attr_name,
-                "Demographic Parity Disparity": f"{info.get('max_difference', 0):.4f}",
-                "Equal Opportunity Difference": (
-                    f"TPR Δ {eq_info.get('tpr_difference', 0):.4f} / FPR Δ {eq_info.get('fpr_difference', 0):.4f}"
+                "Observed Δ (parity)": f"{info.get('observed_difference', info.get('max_difference', 0)):.4f}",
+                "Statistically significant": "yes" if significant else "no",
+                "Equalized odds Δ": (
+                    f"TPR {eq_info.get('tpr_difference', 0):.4f} / FPR {eq_info.get('fpr_difference', 0):.4f}"
                 ),
-                "Status": status,
+                "Screening": status,
             }
         )
 
@@ -343,9 +358,10 @@ def bias_audit_to_dataframe(bias_audit: dict) -> pd.DataFrame:
         return pd.DataFrame(
             {
                 "Protected Attribute": ["—"],
-                "Demographic Parity Disparity": ["Not evaluated"],
-                "Equal Opportunity Difference": ["—"],
-                "Status": [bias_audit.get("status", "⚠️ No audit")],
+                "Observed Δ (parity)": ["Not evaluated"],
+                "Statistically significant": ["—"],
+                "Equalized odds Δ": ["—"],
+                "Screening": [bias_audit.get("status", "⚠️ No audit")],
             }
         )
     return pd.DataFrame(rows)
@@ -399,7 +415,8 @@ def run_full_compliance_audit(
     )
     bias_audit["note"] = (
         "Audit uses proxies derived from anonymized features (Porto Seguro does not include "
-        "real age/gender). Replace with real protected attributes in production."
+        "real age/gender). Replace with real protected attributes in production. "
+        "overall_assessment is screening only — not a fairness certificate."
     )
     bias_audit["classification_threshold"] = threshold
     bias_audit["proxy_attributes"] = True

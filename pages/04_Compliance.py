@@ -196,7 +196,9 @@ with tab3:
 
         "Porto Seguro does not publish age/gender. The audit uses **proxies** from "
 
-        "anonymized features and the model's **optimal threshold**."
+        "anonymized features. Labels are **pass / pass_with_review / monitor / fail**, "
+
+        "not a legal fairness finding. The 10% gate is an internal heuristic."
 
     )
 
@@ -218,6 +220,22 @@ with tab3:
 
         st.dataframe(bias_audit_to_dataframe(bias_audit), use_container_width=True, hide_index=True)
 
+        assessment = bias_audit.get("overall_assessment")
+
+        if assessment:
+
+            st.caption(f"overall_assessment: **{assessment}** · business_decision: **not_taken**")
+
+        policy = bias_audit.get("governance_threshold") or {}
+
+        if policy.get("justification"):
+
+            st.caption(
+
+                f"Governance gate Δ ≤ {policy.get('value', 0.1):.0%}: {policy.get('justification')}"
+
+            )
+
         if bias_audit.get("error"):
 
             st.error(bias_audit["error"])
@@ -234,13 +252,25 @@ with tab3:
 
             )
 
-        elif bias_audit.get("overall_compliance"):
+        elif bias_audit.get("overall_assessment") == "conditional":
 
-            st.success("✅ Demographic parity and equalized odds within thresholds (Δ ≤ 10%).")
+            st.warning(
+
+                "⚠️ **Conditional.** The 10% governance gate held. That is not a fairness "
+
+                "certificate — see observed Δ, statistical significance, and business_decision=not_taken."
+
+            )
 
         else:
 
-            st.warning("⚠️ Deviations across proxy groups — review before production.")
+            st.warning(
+
+                "⚠️ **Review required.** Statistically significant and/or near-threshold "
+
+                "proxy gaps, or the governance gate failed. overall_assessment is screening only."
+
+            )
 
     else:
 

@@ -127,14 +127,41 @@
                 "positive_count": 220
               }
             },
-            "parity_met": true,
             "max_difference": 0.0010610962576505512,
             "statistical_test": {
               "skipped": false,
               "chi2_statistic": 0.03655750486276397,
               "p_value": 0.8483687707292257,
               "significant": false
-            }
+            },
+            "observed_difference": 0.0010610962576505512,
+            "statistically_significant": false,
+            "governance_threshold": 0.1,
+            "governance_threshold_met": true,
+            "parity_screening_result": "pass",
+            "business_decision": "not_taken",
+            "impact": {
+              "status": "computed",
+              "highest_positive_rate_group": "above_median",
+              "lowest_positive_rate_group": "below_median",
+              "positive_rate_ratio": 1.0206865538593783,
+              "extra_flags_vs_lowest_group": 6.0599207274422975,
+              "groups": {
+                "above_median": {
+                  "positive_prediction_rate": 0.05235510418490632,
+                  "approval_rate_analogue": 0.9476448958150937,
+                  "sample_size": 5711
+                },
+                "below_median": {
+                  "positive_prediction_rate": 0.05129400792725577,
+                  "approval_rate_analogue": 0.9487059920727442,
+                  "sample_size": 4289
+                }
+              },
+              "potential_harm": "Group 'above_median' is flagged positive 0.11% more often than 'below_median' (~6 extra flags on n=5711). In an underwriting analogue this can mean tighter terms; this is not a legal harm assessment.",
+              "not_a_legal_harm_assessment": true
+            },
+            "alerts": []
           },
           "region_proxy_ps_reg_03": {
             "attribute": "region_proxy_ps_reg_03",
@@ -155,14 +182,48 @@
                 "positive_count": 77
               }
             },
-            "parity_met": true,
             "max_difference": 0.04185275007378039,
             "statistical_test": {
               "skipped": false,
               "chi2_statistic": 66.1303676534817,
               "p_value": 4.36488816523632e-15,
               "significant": true
-            }
+            },
+            "observed_difference": 0.04185275007378039,
+            "statistically_significant": true,
+            "governance_threshold": 0.1,
+            "governance_threshold_met": true,
+            "parity_screening_result": "pass_with_review",
+            "business_decision": "not_taken",
+            "impact": {
+              "status": "computed",
+              "highest_positive_rate_group": "high",
+              "lowest_positive_rate_group": "low",
+              "positive_rate_ratio": 2.4632156259560625,
+              "extra_flags_vs_lowest_group": 193.65267459138187,
+              "groups": {
+                "high": {
+                  "positive_prediction_rate": 0.07045601901880268,
+                  "approval_rate_analogue": 0.9295439809811973,
+                  "sample_size": 4627
+                },
+                "mid": {
+                  "positive_prediction_rate": 0.0432674375233122,
+                  "approval_rate_analogue": 0.9567325624766878,
+                  "sample_size": 2681
+                },
+                "low": {
+                  "positive_prediction_rate": 0.028603268945022287,
+                  "approval_rate_analogue": 0.9713967310549777,
+                  "sample_size": 2692
+                }
+              },
+              "potential_harm": "Group 'high' is flagged positive 4.19% more often than 'low' (~194 extra flags on n=4627). In an underwriting analogue this can mean tighter terms; this is not a legal harm assessment.",
+              "not_a_legal_harm_assessment": true
+            },
+            "alerts": [
+              "Chi-square is statistically significant while the 10% governance gate is still met. This is not a silent pass."
+            ]
           },
           "vehicle_proxy_ps_car_13": {
             "attribute": "vehicle_proxy_ps_car_13",
@@ -178,18 +239,51 @@
                 "positive_count": 111
               }
             },
-            "parity_met": true,
             "max_difference": 0.05940000000000001,
             "statistical_test": {
               "skipped": false,
               "chi2_statistic": 178.0581749646743,
               "p_value": 1.2865064069891055e-40,
               "significant": true
-            }
+            },
+            "observed_difference": 0.05940000000000001,
+            "statistically_significant": true,
+            "governance_threshold": 0.1,
+            "governance_threshold_met": true,
+            "parity_screening_result": "pass_with_review",
+            "business_decision": "not_taken",
+            "impact": {
+              "status": "computed",
+              "highest_positive_rate_group": "above_median",
+              "lowest_positive_rate_group": "below_median",
+              "positive_rate_ratio": 3.675675675675676,
+              "extra_flags_vs_lowest_group": 297.00000000000006,
+              "groups": {
+                "above_median": {
+                  "positive_prediction_rate": 0.0816,
+                  "approval_rate_analogue": 0.9184,
+                  "sample_size": 5000
+                },
+                "below_median": {
+                  "positive_prediction_rate": 0.0222,
+                  "approval_rate_analogue": 0.9778,
+                  "sample_size": 5000
+                }
+              },
+              "potential_harm": "Group 'above_median' is flagged positive 5.94% more often than 'below_median' (~297 extra flags on n=5000). In an underwriting analogue this can mean tighter terms; this is not a legal harm assessment.",
+              "not_a_legal_harm_assessment": true
+            },
+            "alerts": [
+              "Chi-square is statistically significant while the 10% governance gate is still met. This is not a silent pass."
+            ]
           }
         },
         "violations": [],
-        "recommendations": []
+        "recommendations": [],
+        "alerts": [
+          "Chi-square is statistically significant while the 10% governance gate is still met. This is not a silent pass.",
+          "Chi-square is statistically significant while the 10% governance gate is still met. This is not a silent pass."
+        ]
       },
       "equalized_odds": {
         "overall_equality": true,
@@ -220,9 +314,56 @@
                 }
               }
             },
-            "equality_met": true,
             "tpr_difference": 0.007457121551081275,
-            "fpr_difference": 0.0008436799799507733
+            "fpr_difference": 0.0008436799799507733,
+            "observed_difference": 0.007457121551081275,
+            "statistically_significant": false,
+            "governance_threshold": 0.1,
+            "governance_threshold_met": true,
+            "odds_screening_result": "pass",
+            "business_decision": "not_taken",
+            "impact": {
+              "status": "computed",
+              "highest_positive_rate_group": "above_median",
+              "lowest_positive_rate_group": "below_median",
+              "positive_rate_ratio": 1.0206865538593783,
+              "extra_flags_vs_lowest_group": 6.0599207274422975,
+              "groups": {
+                "below_median": {
+                  "positive_prediction_rate": 0.05129400792725577,
+                  "approval_rate_analogue": 0.9487059920727442,
+                  "sample_size": 4289
+                },
+                "above_median": {
+                  "positive_prediction_rate": 0.05235510418490632,
+                  "approval_rate_analogue": 0.9476448958150937,
+                  "sample_size": 5711
+                }
+              },
+              "potential_harm": "Group 'above_median' is flagged positive 0.11% more often than 'below_median' (~6 extra flags on n=5711). In an underwriting analogue this can mean tighter terms; this is not a legal harm assessment.",
+              "not_a_legal_harm_assessment": true
+            },
+            "calibration": {
+              "status": "computed",
+              "method": "threshold_confusion_matrix",
+              "max_absolute_error": 0.017685168972158986,
+              "groups": {
+                "below_median": {
+                  "observed_claim_rate": 0.03474003264164141,
+                  "positive_prediction_rate": 0.05129400792725577,
+                  "absolute_calibration_error": 0.016553975285614357,
+                  "method": "threshold_confusion_matrix"
+                },
+                "above_median": {
+                  "observed_claim_rate": 0.03466993521274733,
+                  "positive_prediction_rate": 0.05235510418490632,
+                  "absolute_calibration_error": 0.017685168972158986,
+                  "method": "threshold_confusion_matrix"
+                }
+              },
+              "note": "Compares predicted-positive rate to observed claim rate at the decision threshold. Not score-level ECE."
+            },
+            "alerts": []
           },
           "region_proxy_ps_reg_03": {
             "attribute": "region_proxy_ps_reg_03",
@@ -261,9 +402,69 @@
                 }
               }
             },
-            "equality_met": true,
             "tpr_difference": 0.09254864736592314,
-            "fpr_difference": 0.039972703452626976
+            "fpr_difference": 0.039972703452626976,
+            "observed_difference": 0.09254864736592314,
+            "statistically_significant": false,
+            "governance_threshold": 0.1,
+            "governance_threshold_met": true,
+            "odds_screening_result": "pass_with_review",
+            "business_decision": "not_taken",
+            "impact": {
+              "status": "computed",
+              "highest_positive_rate_group": "high",
+              "lowest_positive_rate_group": "low",
+              "positive_rate_ratio": 2.4632156259560625,
+              "extra_flags_vs_lowest_group": 193.65267459138187,
+              "groups": {
+                "low": {
+                  "positive_prediction_rate": 0.028603268945022287,
+                  "approval_rate_analogue": 0.9713967310549777,
+                  "sample_size": 2692
+                },
+                "mid": {
+                  "positive_prediction_rate": 0.0432674375233122,
+                  "approval_rate_analogue": 0.9567325624766878,
+                  "sample_size": 2681
+                },
+                "high": {
+                  "positive_prediction_rate": 0.07045601901880268,
+                  "approval_rate_analogue": 0.9295439809811973,
+                  "sample_size": 4627
+                }
+              },
+              "potential_harm": "Group 'high' is flagged positive 4.19% more often than 'low' (~194 extra flags on n=4627). In an underwriting analogue this can mean tighter terms; this is not a legal harm assessment.",
+              "not_a_legal_harm_assessment": true
+            },
+            "calibration": {
+              "status": "computed",
+              "method": "threshold_confusion_matrix",
+              "max_absolute_error": 0.03328290468986384,
+              "groups": {
+                "low": {
+                  "observed_claim_rate": 0.028603268945022287,
+                  "positive_prediction_rate": 0.028603268945022287,
+                  "absolute_calibration_error": 0.0,
+                  "method": "threshold_confusion_matrix"
+                },
+                "mid": {
+                  "observed_claim_rate": 0.03655352480417755,
+                  "positive_prediction_rate": 0.0432674375233122,
+                  "absolute_calibration_error": 0.00671391271913465,
+                  "method": "threshold_confusion_matrix"
+                },
+                "high": {
+                  "observed_claim_rate": 0.037173114328938835,
+                  "positive_prediction_rate": 0.07045601901880268,
+                  "absolute_calibration_error": 0.03328290468986384,
+                  "method": "threshold_confusion_matrix"
+                }
+              },
+              "note": "Compares predicted-positive rate to observed claim rate at the decision threshold. Not score-level ECE."
+            },
+            "alerts": [
+              "Equalized-odds gap 9.25% is close to the 10% governance threshold."
+            ]
           },
           "vehicle_proxy_ps_car_13": {
             "attribute": "vehicle_proxy_ps_car_13",
@@ -291,22 +492,107 @@
                 }
               }
             },
-            "equality_met": true,
             "tpr_difference": 0.09416098602217171,
-            "fpr_difference": 0.05594017458366829
+            "fpr_difference": 0.05594017458366829,
+            "observed_difference": 0.09416098602217171,
+            "statistically_significant": false,
+            "governance_threshold": 0.1,
+            "governance_threshold_met": true,
+            "odds_screening_result": "pass_with_review",
+            "business_decision": "not_taken",
+            "impact": {
+              "status": "computed",
+              "highest_positive_rate_group": "above_median",
+              "lowest_positive_rate_group": "below_median",
+              "positive_rate_ratio": 3.675675675675676,
+              "extra_flags_vs_lowest_group": 297.00000000000006,
+              "groups": {
+                "below_median": {
+                  "positive_prediction_rate": 0.0222,
+                  "approval_rate_analogue": 0.9778,
+                  "sample_size": 5000
+                },
+                "above_median": {
+                  "positive_prediction_rate": 0.0816,
+                  "approval_rate_analogue": 0.9184,
+                  "sample_size": 5000
+                }
+              },
+              "potential_harm": "Group 'above_median' is flagged positive 5.94% more often than 'below_median' (~297 extra flags on n=5000). In an underwriting analogue this can mean tighter terms; this is not a legal harm assessment.",
+              "not_a_legal_harm_assessment": true
+            },
+            "calibration": {
+              "status": "computed",
+              "method": "threshold_confusion_matrix",
+              "max_absolute_error": 0.040400000000000005,
+              "groups": {
+                "below_median": {
+                  "observed_claim_rate": 0.0282,
+                  "positive_prediction_rate": 0.0222,
+                  "absolute_calibration_error": 0.005999999999999998,
+                  "method": "threshold_confusion_matrix"
+                },
+                "above_median": {
+                  "observed_claim_rate": 0.0412,
+                  "positive_prediction_rate": 0.0816,
+                  "absolute_calibration_error": 0.040400000000000005,
+                  "method": "threshold_confusion_matrix"
+                }
+              },
+              "note": "Compares predicted-positive rate to observed claim rate at the decision threshold. Not score-level ECE."
+            },
+            "alerts": [
+              "Equalized-odds gap 9.42% is close to the 10% governance threshold."
+            ]
           }
         },
-        "violations": []
+        "violations": [],
+        "alerts": [
+          "Equalized-odds gap 9.25% is close to the 10% governance threshold.",
+          "Equalized-odds gap 9.42% is close to the 10% governance threshold."
+        ]
       },
-      "overall_compliance": true,
       "classification_threshold": 0.06218303673820481,
       "audit_valid": true,
       "prediction_summary": {
         "positive_prediction_rate": 0.0519,
         "unique_score_count": 9985
       },
-      "note": "Audit uses proxies derived from anonymized features (Porto Seguro does not include real age/gender). Replace with real protected attributes in production.",
-      "proxy_attributes": true
+      "note": "Audit uses proxies derived from anonymized features (Porto Seguro does not include real age/gender). Replace with real protected attributes in production. overall_assessment is not a fairness certificate.",
+      "proxy_attributes": true,
+      "overall_assessment": "review_required",
+      "layers": {
+        "observed_difference": "Always reported (max group rate − min group rate).",
+        "statistical_significance": "Chi-square on the relevant 2×K table when cell counts allow; p < 0.05 ⇒ statistically_significant=true. Independent of the 10% gate.",
+        "governance_threshold": "Internal 10pp absolute screen (see governance_threshold policy). threshold_met is not a fairness certificate.",
+        "business_decision": "Not inferred by this module. overall_assessment is screening only; deployment, pricing, or threshold changes require a named owner."
+      },
+      "governance_threshold": {
+        "value": 0.1,
+        "unit": "absolute_difference_in_group_rates",
+        "metrics": [
+          "demographic_parity_positive_rate",
+          "equalized_odds_tpr",
+          "equalized_odds_fpr"
+        ],
+        "origin": "internal_screening_heuristic",
+        "source": "Common configurable 10 percentage-point absolute-difference screen in ML fairness toolkits (e.g. Fairlearn/Aequitas-style dashboards). It is not the US EEOC four-fifths *ratio* rule, not an EDPB/AEPD metric, and not a GDPR Art. 5(1)(a) test.",
+        "justification": "A 0.10 absolute gap is used only as a governance *gate* so large disparities are never silent. Gaps below 0.10 can still be statistically significant or operationally material; those cases are pass_with_review or monitor, not pass. Crossing 0.10 is fail for this screen only — not a legal finding of discrimination.",
+        "not_a_legal_threshold": true,
+        "pass_does_not_mean_no_disparity": true,
+        "significance_alpha": 0.05,
+        "near_threshold": 0.08,
+        "monitor_band": 0.03
+      },
+      "intersectionality": {
+        "status": "not_computed_in_static_pack",
+        "reason": "Pairwise cells need row-level labels; re-run comprehensive_bias_audit."
+      },
+      "business_decision": {
+        "status": "not_taken",
+        "overall_assessment_is_not_a_go_live_decision": true,
+        "note": "conditional / review_required are screening outcomes. They do not approve deployment, premium setting, or claim handling."
+      }
     },
     "transparency": "Full explainability provided",
     "accountability": "Model decisions are traceable",
@@ -457,5 +743,672 @@
     "Regular retraining with updated data",
     "Maintain explainability reports for audits",
     "Document model decisions for regulatory compliance"
-  ]
+  ],
+  "gdpr": {
+    "schema_version": "1.0.0",
+    "assessment_context": {
+      "mode": "demo_reference_architecture",
+      "generated_for": "innovation_lab_evidence_pack",
+      "demo": {
+        "dataset": "Porto Seguro Safe Driver Prediction (Kaggle)",
+        "feature_naming": "ps_* columns described by the publisher as anonymised",
+        "identifiable_personal_data_confirmed": "unknown",
+        "live_insurance_book": false,
+        "recital_26_legal_finding": false
+      },
+      "production_analogue": {
+        "would_be_distinct_processing": true,
+        "note": "Scoring identifiable applicants, policyholders, or claimants for underwriting, pricing, or claims is a separate processing operation. It needs its own purposes, Art. 6 basis, notices, EIPD, and records."
+      }
+    },
+    "generated_at": "2026-11-06T12:47:07+00:00",
+    "assurance_level": "evidence_only",
+    "compliance_status": "not_a_legal_determination",
+    "review_required": true,
+    "open_gaps": [
+      {
+        "section": "applicability_and_anonymisation",
+        "gap": "No re-identification test or Recital 26 analysis is on record."
+      },
+      {
+        "section": "applicability_and_anonymisation",
+        "gap": "Publisher anonymisation must not be treated as GDPR non-applicability."
+      },
+      {
+        "section": "roles_and_accountability",
+        "gap": "Controller identity is not established (owner is null)."
+      },
+      {
+        "section": "roles_and_accountability",
+        "gap": "Processor inventory is not a signed Art. 28 record."
+      },
+      {
+        "section": "roles_and_accountability",
+        "gap": "DPO designation (Art. 37) is not evidenced."
+      },
+      {
+        "section": "purposes_and_lawful_basis",
+        "gap": "Art. 6 lawful basis is unknown / to_be_determined."
+      },
+      {
+        "section": "purposes_and_lawful_basis",
+        "gap": "No documented balancing test or contract-necessity analysis."
+      },
+      {
+        "section": "purposes_and_lawful_basis",
+        "gap": "Art. 9 condition is not assessed for a live insurance book."
+      },
+      {
+        "section": "data_inventory_and_minimisation",
+        "gap": "No signed data inventory or necessity review per variable."
+      },
+      {
+        "section": "data_inventory_and_minimisation",
+        "gap": "Recipients and sources for a production deployment are not documented."
+      },
+      {
+        "section": "transparency",
+        "gap": "No production privacy notice (Arts. 13–14) is on record."
+      },
+      {
+        "section": "transparency",
+        "gap": "Layered notice, language, and timing of information are not evidenced."
+      },
+      {
+        "section": "data_subject_rights",
+        "gap": "No request channel, identity verification, or fulfilment SLA is documented."
+      },
+      {
+        "section": "data_subject_rights",
+        "gap": "Erasure, objection, and portability procedures are missing."
+      },
+      {
+        "section": "automated_decision_making",
+        "gap": "No assessment of legal or similarly significant effects for a live underwriting/pricing/claims decision."
+      },
+      {
+        "section": "automated_decision_making",
+        "gap": "Human intervention is a design claim; effectiveness is not tested."
+      },
+      {
+        "section": "automated_decision_making",
+        "gap": "Art. 22(3) safeguards (intervention, express a view, contest) are not operationally evidenced."
+      },
+      {
+        "section": "privacy_by_design_and_default",
+        "gap": "No Art. 25 risk-based measure register tied to a live purpose."
+      },
+      {
+        "section": "privacy_by_design_and_default",
+        "gap": "Default settings for a production service are not evidenced."
+      },
+      {
+        "section": "security_of_processing",
+        "gap": "No Art. 32 test report, penetration test, or residual-risk acceptance by the controller."
+      },
+      {
+        "section": "security_of_processing",
+        "gap": "Local JSONL hash chain is not immutable storage."
+      },
+      {
+        "section": "retention_and_deletion",
+        "gap": "Retention period is to_be_determined."
+      },
+      {
+        "section": "retention_and_deletion",
+        "gap": "Deletion and backup erasure procedures are missing."
+      },
+      {
+        "section": "dpia",
+        "gap": "Art. 35 decision is unsigned; residual scores in the static pack are estimated pending verification."
+      },
+      {
+        "section": "dpia",
+        "gap": "DPO consultation (Art. 35(2)) is not evidenced."
+      },
+      {
+        "section": "processors_and_transfers",
+        "gap": "No Art. 28 contracts, SCCs, or transfer assessments are on record."
+      },
+      {
+        "section": "processors_and_transfers",
+        "gap": "Hosting, logging, and model-vendor roles for production are unknown."
+      },
+      {
+        "section": "records_and_incident_response",
+        "gap": "Art. 30 record of processing activities is missing."
+      },
+      {
+        "section": "records_and_incident_response",
+        "gap": "Personal-data breach detection, 72-hour notification, and data-subject communication procedures are missing."
+      }
+    ],
+    "evaluations": {
+      "applicability_and_anonymisation": {
+        "legal_reference": "GDPR Art. 2, Art. 4(1); Recital 26",
+        "applicability": "unknown",
+        "applicability_rationale": "The demo file uses publisher-anonymised Kaggle columns (ps_*). A publisher description is not a Recital 26 finding that the information is anonymous. Identifiability, including means reasonably likely to be used, has not been tested. GDPR applicability for this file remains unknown.",
+        "evidence_status": "partial",
+        "control_status": "not_tested",
+        "evidence_refs": [
+          {
+            "path": "gdpr_dpia_v1.json",
+            "kind": "document"
+          },
+          {
+            "path": "README.md",
+            "kind": "document"
+          }
+        ],
+        "owner": null,
+        "reviewed_at": null,
+        "reviewer": null,
+        "gaps": [
+          "No re-identification test or Recital 26 analysis is on record.",
+          "Publisher anonymisation must not be treated as GDPR non-applicability."
+        ],
+        "next_actions": [
+          "Controller (not this software) must determine whether the dataset is anonymous information or personal data.",
+          "If the same pipeline is used on identifiable records, treat that as a distinct processing operation."
+        ],
+        "review_required": true,
+        "findings": {
+          "publisher_anonymisation_claim": "stated_by_dataset_publisher",
+          "recital_26_legal_finding": false,
+          "personal_data_in_demo": "unknown",
+          "pseudonymisation_demonstrated": false,
+          "reidentification_risk_tested": false
+        }
+      },
+      "roles_and_accountability": {
+        "legal_reference": "GDPR Art. 4(7)–(8), Art. 5(2), Art. 24, Art. 37",
+        "applicability": "unknown",
+        "applicability_rationale": "No controller, processor, or DPO is appointed in this repository. Labels in the static EIPD pack are hypothetical demo actors, not legal appointments.",
+        "evidence_status": "partial",
+        "control_status": "not_tested",
+        "evidence_refs": [
+          {
+            "path": "gdpr_dpia_v1.json",
+            "kind": "document"
+          }
+        ],
+        "owner": null,
+        "reviewed_at": null,
+        "reviewer": null,
+        "gaps": [
+          "Controller identity is not established (owner is null).",
+          "Processor inventory is not a signed Art. 28 record.",
+          "DPO designation (Art. 37) is not evidenced."
+        ],
+        "next_actions": [
+          "A real operator must name controller, contact point, and whether a DPO is required.",
+          "Do not treat demo role strings as appointments."
+        ],
+        "review_required": true,
+        "findings": {
+          "controller": null,
+          "processor": null,
+          "dpo_required": "unknown",
+          "dpo_appointed": false,
+          "hypothetical_demo_labels_are_not_appointments": true
+        }
+      },
+      "purposes_and_lawful_basis": {
+        "legal_reference": "GDPR Art. 5(1)(b), Art. 6, Art. 9",
+        "applicability": "unknown",
+        "applicability_rationale": "Intended demo purpose is claim-probability decision support. No Art. 6 basis is selected. Consent is not used as a default. Art. 9 is not determined merely because special-category column names are absent.",
+        "evidence_status": "partial",
+        "control_status": "not_tested",
+        "evidence_refs": [
+          {
+            "path": "gdpr_dpia_v1.json",
+            "kind": "document"
+          },
+          {
+            "path": "README.md",
+            "kind": "document"
+          }
+        ],
+        "owner": null,
+        "reviewed_at": null,
+        "reviewer": null,
+        "gaps": [
+          "Art. 6 lawful basis is unknown / to_be_determined.",
+          "No documented balancing test or contract-necessity analysis.",
+          "Art. 9 condition is not assessed for a live insurance book."
+        ],
+        "next_actions": [
+          "Controller must select and justify an Art. 6 basis for any identifiable processing.",
+          "Do not default to consent for underwriting or claims scoring."
+        ],
+        "review_required": true,
+        "findings": {
+          "intended_purpose_demo": "Estimate P(claim) to support a human reviewer; emit explanations and technical evidence.",
+          "art6_lawful_basis": "unknown",
+          "art6_justification": null,
+          "consent_selected_by_default": false,
+          "art9_special_category_column_names_observed": false,
+          "art9_applicability": "unknown",
+          "art9_condition": null
+        }
+      },
+      "data_inventory_and_minimisation": {
+        "legal_reference": "GDPR Art. 5(1)(c), Art. 30(1)(c)–(d)",
+        "applicability": "unknown",
+        "applicability_rationale": "Demo inventory is the Kaggle schema (ps_ind/ps_reg/ps_car/ps_calc). Necessity of each variable for a live purpose is not evidenced. Fairness screening uses proxy columns; those metrics are not GDPR evidence and this block does not collect or infer protected attributes.",
+        "evidence_status": "partial",
+        "control_status": "not_tested",
+        "evidence_refs": [
+          {
+            "path": "src/governance/bias_audit.py",
+            "kind": "code"
+          },
+          {
+            "path": "utils/compliance_audit.py",
+            "kind": "code"
+          },
+          {
+            "path": "gdpr_dpia_v1.json",
+            "kind": "document"
+          }
+        ],
+        "owner": null,
+        "reviewed_at": null,
+        "reviewer": null,
+        "gaps": [
+          "No signed data inventory or necessity review per variable.",
+          "Recipients and sources for a production deployment are not documented."
+        ],
+        "next_actions": [
+          "Map categories, sources, recipients, and retention to the live purpose.",
+          "Keep fairness proxies out of any protected-attribute collection process."
+        ],
+        "review_required": true,
+        "findings": {
+          "demo_feature_prefixes": [
+            "ps_ind_*",
+            "ps_reg_*",
+            "ps_car_*",
+            "ps_calc_*"
+          ],
+          "direct_identifiers_in_demo_schema": "none_observed",
+          "fairness_audit_inputs": {
+            "columns": [
+              "ps_ind_03",
+              "ps_reg_03",
+              "ps_car_13"
+            ],
+            "role": "proxy_screening_features",
+            "collected_as_protected_attributes": false,
+            "not_gdpr_fairness_evidence": true,
+            "note": "Technical bias metrics must not be reused as Art. 5(1)(a) or non-discrimination proof."
+          }
+        }
+      },
+      "transparency": {
+        "legal_reference": "GDPR Arts. 12–14",
+        "applicability": "unknown",
+        "applicability_rationale": "The Model Card and EIPD pack describe the demo system. They are not an Art. 12–14 privacy notice to data subjects of a live controller.",
+        "evidence_status": "partial",
+        "control_status": "not_tested",
+        "evidence_refs": [
+          {
+            "path": "app.py",
+            "kind": "code"
+          },
+          {
+            "path": "pages/01_Overview.py",
+            "kind": "code"
+          },
+          {
+            "path": "gdpr_dpia_v1.json",
+            "kind": "document"
+          }
+        ],
+        "owner": null,
+        "reviewed_at": null,
+        "reviewer": null,
+        "gaps": [
+          "No production privacy notice (Arts. 13–14) is on record.",
+          "Layered notice, language, and timing of information are not evidenced."
+        ],
+        "next_actions": [
+          "Draft and approve notices against the live purpose, recipients, and rights."
+        ],
+        "review_required": true,
+        "findings": {
+          "privacy_notice_status": "missing_for_production",
+          "demo_model_card_is_not_art13_notice": true
+        }
+      },
+      "data_subject_rights": {
+        "legal_reference": "GDPR Arts. 12, 15–22",
+        "applicability": "unknown",
+        "applicability_rationale": "No operational procedure exists to receive or fulfil data-subject requests. Native EBM explanations are technical artefacts analogous to Art. 15(1)(h) logic information; they are not a rights-handling process.",
+        "evidence_status": "partial",
+        "control_status": "not_tested",
+        "evidence_refs": [
+          {
+            "path": "pages/03_Explainability.py",
+            "kind": "code"
+          },
+          {
+            "path": "src/models/interpret_bridge.py",
+            "kind": "code"
+          },
+          {
+            "path": "gdpr_dpia_v1.json",
+            "kind": "document"
+          }
+        ],
+        "owner": null,
+        "reviewed_at": null,
+        "reviewer": null,
+        "gaps": [
+          "No request channel, identity verification, or fulfilment SLA is documented.",
+          "Erasure, objection, and portability procedures are missing."
+        ],
+        "next_actions": [
+          "Document procedures and keep proof of handling for each applicable right."
+        ],
+        "review_required": true,
+        "findings": {
+          "procedures_documented": false,
+          "art_15_1_h_logic_information": "technical_explanations_only"
+        }
+      },
+      "automated_decision_making": {
+        "legal_reference": "GDPR Art. 22; Recital 71",
+        "applicability": "unknown",
+        "applicability_rationale": "Art. 22 applicability is not determined. Advisory design and a human reviewer do not, by themselves, prove that Art. 22 does not apply. Exclusive automation, legal or similarly significant effects, and effective human intervention remain untested.",
+        "evidence_status": "partial",
+        "control_status": "not_tested",
+        "evidence_refs": [
+          {
+            "path": "pages/06_EU_AI_Act.py",
+            "kind": "code"
+          },
+          {
+            "path": "pages/05_Business_Context.py",
+            "kind": "code"
+          },
+          {
+            "path": "gdpr_dpia_v1.json",
+            "kind": "document"
+          }
+        ],
+        "owner": null,
+        "reviewed_at": null,
+        "reviewer": null,
+        "gaps": [
+          "No assessment of legal or similarly significant effects for a live underwriting/pricing/claims decision.",
+          "Human intervention is a design claim; effectiveness is not tested.",
+          "Art. 22(3) safeguards (intervention, express a view, contest) are not operationally evidenced."
+        ],
+        "next_actions": [
+          "Assess Art. 22 against the live decision, not against the presence of a UI reviewer.",
+          "If Art. 22 applies, evidence the Art. 22(2) condition and Art. 22(3) safeguards."
+        ],
+        "review_required": true,
+        "findings": {
+          "article_22_applicable": "unknown",
+          "legal_or_similarly_significant_effects": "unknown",
+          "exclusively_automated": "unknown",
+          "human_review": "design_claim_not_tested",
+          "human_review_does_not_prove_art22_inapplicable": true,
+          "safeguards_art_22_3": "to_be_evidenced"
+        }
+      },
+      "privacy_by_design_and_default": {
+        "legal_reference": "GDPR Art. 25",
+        "applicability": "unknown",
+        "applicability_rationale": "Repository design choices (competition schema, no Art. 9 column names, train-only feature fit) are not an Art. 25 programme for a live controller.",
+        "evidence_status": "partial",
+        "control_status": "not_tested",
+        "evidence_refs": [
+          {
+            "path": "README.md",
+            "kind": "document"
+          },
+          {
+            "path": "gdpr_dpia_v1.json",
+            "kind": "document"
+          },
+          {
+            "path": "src/governance/bias_audit.py",
+            "kind": "code"
+          },
+          {
+            "path": "utils/compliance_audit.py",
+            "kind": "code"
+          }
+        ],
+        "owner": null,
+        "reviewed_at": null,
+        "reviewer": null,
+        "gaps": [
+          "No Art. 25 risk-based measure register tied to a live purpose.",
+          "Default settings for a production service are not evidenced."
+        ],
+        "next_actions": [
+          "Document Art. 25 measures against the actual processing, then test them."
+        ],
+        "review_required": true,
+        "findings": {
+          "art25_programme": "not_evidenced"
+        }
+      },
+      "security_of_processing": {
+        "legal_reference": "GDPR Art. 32",
+        "applicability": "unknown",
+        "applicability_rationale": "Code contains integrity checksums (SHA-256 sidecars) and a local audit hash chain. Those artefacts are not a tested Art. 32 control set (no WORM, no KMS, no security test report).",
+        "evidence_status": "partial",
+        "control_status": "not_tested",
+        "evidence_refs": [
+          {
+            "path": "src/models/ebm_train.py",
+            "kind": "code"
+          },
+          {
+            "path": "src/control_plane/audit.py",
+            "kind": "code"
+          },
+          {
+            "path": "docs/governance/LINE_REPORT.md",
+            "kind": "document"
+          },
+          {
+            "path": "api_server.py",
+            "kind": "code"
+          }
+        ],
+        "owner": null,
+        "reviewed_at": null,
+        "reviewer": null,
+        "gaps": [
+          "No Art. 32 test report, penetration test, or residual-risk acceptance by the controller.",
+          "Local JSONL hash chain is not immutable storage."
+        ],
+        "next_actions": [
+          "Commission security testing appropriate to a live personal-data processing."
+        ],
+        "review_required": true,
+        "findings": {
+          "sha256_sidecars": "implemented_in_code_local_artifacts_not_published",
+          "audit_hash_chain": "local_detection_not_worm"
+        }
+      },
+      "retention_and_deletion": {
+        "legal_reference": "GDPR Art. 5(1)(e), Art. 17",
+        "applicability": "unknown",
+        "applicability_rationale": "Demo artifacts are kept for reproducibility. No justified retention schedule, deletion procedure, or backup-expiry control is on record.",
+        "evidence_status": "missing",
+        "control_status": "not_tested",
+        "evidence_refs": [
+          {
+            "path": "gdpr_dpia_v1.json",
+            "kind": "document"
+          }
+        ],
+        "owner": null,
+        "reviewed_at": null,
+        "reviewer": null,
+        "gaps": [
+          "Retention period is to_be_determined.",
+          "Deletion and backup erasure procedures are missing."
+        ],
+        "next_actions": [
+          "Define retention aligned with the live purpose and insurance record-keeping law, then evidence deletion."
+        ],
+        "review_required": true,
+        "findings": {
+          "retention_period": "to_be_determined",
+          "deletion_procedure": "missing",
+          "backup_expiry": "missing"
+        }
+      },
+      "dpia": {
+        "legal_reference": "GDPR Art. 35; Art. 36; EDPB WP248 rev.01",
+        "applicability": "unknown",
+        "applicability_rationale": "A demonstration EIPD pack and a screening workspace exist. They are not a signed Art. 35 decision and not an Art. 36 prior consultation. Publisher anonymisation does not remove the need to screen a live identifiable processing.",
+        "evidence_status": "partial",
+        "control_status": "not_tested",
+        "evidence_refs": [
+          {
+            "path": "gdpr_dpia_v1.json",
+            "kind": "document"
+          },
+          {
+            "path": "src/governance/dpia_workspace/screening.py",
+            "kind": "code"
+          },
+          {
+            "path": "tests/test_dpia_workspace.py",
+            "kind": "test"
+          }
+        ],
+        "owner": null,
+        "reviewed_at": null,
+        "reviewer": null,
+        "gaps": [
+          "Art. 35 decision is unsigned; residual scores in the static pack are estimated pending verification.",
+          "DPO consultation (Art. 35(2)) is not evidenced."
+        ],
+        "next_actions": [
+          "For identifiable production processing, complete screening, EIPD, and residual-risk review.",
+          "Flag Art. 36 only if residual high risk remains after mitigations — not because this demo exists."
+        ],
+        "review_required": true,
+        "findings": {
+          "art35_screening_outcome": "to_be_assessed_for_live_processing",
+          "art35_decision": "not_signed",
+          "art36_prior_consultation": "not_indicated_for_this_demo",
+          "static_pack": "gdpr_dpia_v1.json",
+          "workspace": "src/governance/dpia_workspace/"
+        }
+      },
+      "processors_and_transfers": {
+        "legal_reference": "GDPR Art. 28; Arts. 44–49",
+        "applicability": "unknown",
+        "applicability_rationale": "This local demo stack does not configure a processor contract or a third-country transfer. That observation is not a finding that Art. 28 or Chapter V are not applicable to a live deployment.",
+        "evidence_status": "partial",
+        "control_status": "not_tested",
+        "evidence_refs": [
+          {
+            "path": "gdpr_dpia_v1.json",
+            "kind": "document"
+          }
+        ],
+        "owner": null,
+        "reviewed_at": null,
+        "reviewer": null,
+        "gaps": [
+          "No Art. 28 contracts, SCCs, or transfer assessments are on record.",
+          "Hosting, logging, and model-vendor roles for production are unknown."
+        ],
+        "next_actions": [
+          "Inventory processors and international transfers before any live personal-data processing."
+        ],
+        "review_required": true,
+        "findings": {
+          "processors_configured_in_demo": "none_observed",
+          "international_transfers_configured_in_demo": "none_observed",
+          "art28_agreement": null,
+          "transfer_tool": null
+        }
+      },
+      "records_and_incident_response": {
+        "legal_reference": "GDPR Art. 30; Arts. 33–34",
+        "applicability": "unknown",
+        "applicability_rationale": "Control-plane JSONL is a technical audit log, not an Art. 30 record of processing. No Arts. 33–34 incident procedure is evidenced.",
+        "evidence_status": "partial",
+        "control_status": "not_tested",
+        "evidence_refs": [
+          {
+            "path": "src/control_plane/audit.py",
+            "kind": "code"
+          },
+          {
+            "path": "gdpr_dpia_v1.json",
+            "kind": "document"
+          }
+        ],
+        "owner": null,
+        "reviewed_at": null,
+        "reviewer": null,
+        "gaps": [
+          "Art. 30 record of processing activities is missing.",
+          "Personal-data breach detection, 72-hour notification, and data-subject communication procedures are missing."
+        ],
+        "next_actions": [
+          "Maintain Art. 30 records where required and rehearse Arts. 33–34 procedures."
+        ],
+        "review_required": true,
+        "findings": {
+          "art30_record": "missing",
+          "art33_34_procedure": "missing",
+          "technical_audit_log_is_not_art30": true
+        }
+      }
+    },
+    "legal_sources": [
+      {
+        "instrument": "Regulation (EU) 2016/679 (GDPR)",
+        "eli": "https://eur-lex.europa.eu/eli/reg/2016/679/oj",
+        "oj": "OJ L 119, 4.5.2016",
+        "retrieved_live": false,
+        "note": "Cited from encoded repository references. Not a live EUR-Lex retrieval."
+      },
+      {
+        "instrument": "GDPR Recital 26 (anonymous information; identifiability including means reasonably likely to be used)",
+        "eli": "https://eur-lex.europa.eu/eli/reg/2016/679/oj",
+        "retrieved_live": false
+      },
+      {
+        "instrument": "EDPB WP248 rev.01 — Guidelines on Data Protection Impact Assessment (DPIA)",
+        "retrieved_live": false,
+        "note": "Referenced as encoded guidance; not fetched in this run."
+      },
+      {
+        "instrument": "AEPD — Guía práctica para las Evaluaciones de Impacto en la Protección de los Datos (informative)",
+        "retrieved_live": false,
+        "note": "AEPD lists of treatments requiring an EIPD are informative, not exhaustive (Art. 35(4)–(5))."
+      }
+    ],
+    "limitations": [
+      "Technical evidence is not GDPR compliance.",
+      "Unknown or null fields are unset on purpose — they are not implicit approvals.",
+      "Human review in the demo does not prove that Art. 22 is inapplicable.",
+      "Publisher anonymisation does not prove Recital 26 anonymity or GDPR non-applicability.",
+      "Fairness proxy metrics are excluded from this block as GDPR proof."
+    ],
+    "pending_legal_or_dpo_decisions": [
+      "Whether GDPR applies to the demo file (Recital 26 / identifiability).",
+      "Controller, processor, and DPO appointments for any live processing.",
+      "Art. 6 lawful basis and, if relevant, Art. 9 condition — not consent by default.",
+      "Art. 22 applicability, effects, exclusive automation, and effective intervention.",
+      "Art. 35 EIPD sign-off and whether Art. 36 prior consultation is required.",
+      "Retention schedule, Art. 30 records, and Arts. 33–34 incident procedures."
+    ]
+  }
 }

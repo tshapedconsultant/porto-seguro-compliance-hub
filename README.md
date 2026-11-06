@@ -223,8 +223,9 @@ The architecture materializes audit logs into evidence packs for the dashboard. 
 | `docs/audit_results.json` | Per-pillar technical evidence status (local / generated) |
 | `docs/drift_monitoring_latest.json` | Latest data drift gate check (Art. 9) |
 | `docs/robustness_results.json` | Adversarial red teaming and noise tests (Art. 15) |
-| `eu_ai_act_conformity_v1.json` | Exportable evidence pack (demo; **not** a completed Art. 43 procedure); `schema_version` + assurance fields |
-| `gdpr_dpia_v1.json` | GDPR Art. 35 DPIA / EIPD pack (AEPD innovation-lab walkthrough; not a supervisory filing) |
+| `eu_ai_act_conformity_v1.json` | Exportable evidence pack (demo; **not** a completed Art. 43 procedure); `schema_version` + assurance fields; additive `gdpr` block |
+| `gdpr_dpia_v1.json` | GDPR Art. 35 DPIA / EIPD pack (AEPD innovation-lab walkthrough; not a supervisory filing) + structured `gdpr` evidence block |
+| `docs/governance/GDPR_EVIDENCE.md` | How the `gdpr` block is generated, validated, and what it does **not** certify |
 | `training_results.json` | Hold-out metrics + optimal threshold parameters (local) |
 | `monitoring/performance_history.json` | Production ROC-AUC historical logs (local) |
 
@@ -263,15 +264,17 @@ Kolmogorov–Smirnov gates isolate structural shifts from harmless variance.
 
 ### 4. Privacy-by-Design Fairness Optimization
 
-Proxy-based bias audits when sensitive demographics cannot be collected under privacy rules. Demo dataset ≠ Recital 26 determination.
+Proxy-based bias audits when sensitive demographics cannot be collected under privacy rules. Demo dataset ≠ Recital 26 determination. Proxy metrics are **not** GDPR Art. 5(1)(a) evidence (see `gdpr` block / `docs/governance/GDPR_EVIDENCE.md`).
 
 ![Demographic Parity and Equalized Odds Verification Table](porto4.png)
 
-| Protected attribute (proxy) | Demographic parity disparity | Equal opportunity | Status |
-|-----------------------------|------------------------------|-------------------|--------|
-| `risk_proxy_ps_ind_03` | 0.0011 | TPR Δ 0.0075 / FPR Δ 0.0008 | Pass |
-| `region_proxy_ps_reg_03` | 0.0419 | TPR Δ 0.0925 / FPR Δ 0.0400 | Pass |
-| `vehicle_proxy_ps_car_13` | 0.0594 | TPR Δ 0.0942 / FPR Δ 0.0559 | Pass |
+| Protected attribute (proxy) | Observed Δ (parity) | Significant (p<0.05) | Equalized odds | Screening |
+|-----------------------------|---------------------|-------------------------|----------------|-----------|
+| `risk_proxy_ps_ind_03` | 0.0011 | no | TPR Δ 0.0075 / FPR Δ 0.0008 | pass |
+| `region_proxy_ps_reg_03` | 0.0419 | **yes** | TPR Δ 0.0925 / FPR Δ 0.0400 | pass_with_review |
+| `vehicle_proxy_ps_car_13` | 0.0594 | **yes** | TPR Δ 0.0942 / FPR Δ 0.0559 | pass_with_review |
+
+`overall_assessment`: **review_required**. The 10% gate is an internal heuristic, not a legal threshold. Significant 4–6% parity gaps and ~9.3% TPR gaps are not a silent pass.
 
 ---
 
@@ -290,7 +293,7 @@ porto-seguro/
 ├── src/
 │   ├── data_processing/            # Polars: load, FE, validation
 │   ├── models/                     # EBM, evaluation, explainability
-│   ├── governance/                 # Bias audit, EIPD workspace, reporting
+│   ├── governance/                 # Bias audit, EIPD workspace, GDPR evidence block, reporting
 │   ├── control_plane/              # Policies, approvals, runtime adapter
 │   └── monitoring/                 # Drift, production gate, tracker
 ├── pages/

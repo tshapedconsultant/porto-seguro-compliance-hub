@@ -120,7 +120,7 @@ st.subheader("Navigation")
 st.info(
     "Explore the sections in the sidebar: **Overview**, **Performance**, "
     "**Explainability**, **Compliance** (EU AI Act / Solvency II), **Drift Monitoring**, "
-    "and **DPIA GDPR** (EIPD art. 35 RGPD)."
+    "and **DPIA GDPR** (EIPD / GDPR Art. 35)."
 )
 
 if Path("training_results.json").exists():

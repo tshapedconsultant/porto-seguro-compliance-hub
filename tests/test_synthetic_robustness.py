@@ -136,6 +136,8 @@ def test_synthetic_end_to_end_evidence_pack(tmp_path):
     assert report["schema_version"] == "1.1.0"
     assert report["disclaimer"]["not_a_conformity_decision"] is True
     assert "Compliant" not in json.dumps(report)
+    assert report["gdpr"]["compliance_status"] == "not_a_legal_determination"
+    assert report["gdpr"]["review_required"] is True
     assurance = build_assurance_fields(
         evidence_available=True,
         control_tested=True,

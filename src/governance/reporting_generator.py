@@ -14,6 +14,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, Optional
 
+from src.governance.gdpr_evidence import attach_gdpr_block
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -203,6 +205,7 @@ def generate_unified_ai_report(
                 "Solvency II (EU Insurance Regulation)",
                 "EU AI Act (High-Risk AI Systems)",
                 "Responsible AI Framework",
+                "GDPR (Regulation (EU) 2016/679) — assessment, not certification",
             ],
         },
         "model_details": {
@@ -303,7 +306,10 @@ def generate_unified_ai_report(
             "transparency": "Full explainability provided",
             "accountability": "Model decisions are traceable",
             "robustness": validation_results or "Not Evaluated",
-            "privacy": "Demo Kaggle features are publisher-anonymised; not a Recital 26 legal finding",
+            "privacy": (
+                "Demo Kaggle features are publisher-anonymised; not a Recital 26 legal finding. "
+                "See top-level gdpr block (not a legal determination)."
+            ),
             "drift_monitoring": format_drift_monitoring_section(drift_monitoring_results),
             "evidence_status": "review_required",
             "compliance_status": "not_a_conformity_decision",
@@ -323,8 +329,10 @@ def generate_unified_ai_report(
             "Maintain explainability reports for audits",
             "Document model decisions for regulatory compliance",
             "Treat dashboard tiles as evidence present — not a conformity decision",
+            "Complete GDPR gaps in the gdpr block; do not read that block as certification",
         ],
     }
+    report = attach_gdpr_block(report)
 
     if output_path:
         with open(output_path, "w", encoding="utf-8") as f:

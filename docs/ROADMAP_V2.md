@@ -26,7 +26,7 @@ Hechos verificados. No son criterios de salida de producción.
 | Semántica de revisión distinta en individual vs lote | `/predict`: `review_required = uncertainty_flag or legal_effect`. `/batch_predict`: solo `uncertainty_flag` por fila, aunque el contexto lleva `legal_effect_decision` | Asimetría real; unificar es trabajo de Fase 3 |
 | Binding de aprobación | `/predict` envía `approval_payload`. `/batch_predict` **no** | El ticket de lote no queda atado al payload |
 | CI gobernanza vs ML | Job `tests` en cada push/PR. Job `ml-synthetic` si cambian rutas ML, cron semanal `0 6 * * 0`, o `workflow_dispatch`. **No** hay `continue-on-error` | Si `ml-synthetic` corre y falla, falla el workflow |
-| Árbol publicado | `.gitignore` es deny-all (`*`) + allowlist. `docs/THREAT_MODEL.md`, `docs/ASSURANCE_MODEL.md`, `examples/evidence/`, `docs/schemas/` **no** salen en un clone de GitHub | README no debe enlazarlos como si existieran en el remoto |
+| Árbol publicado | `.gitignore` es deny-all (`*`) + allowlist. `docs/THREAT_MODEL.md`, `docs/ASSURANCE_MODEL.md`, `examples/evidence/` **no** salen en un clone de GitHub. `docs/schemas/gdpr_evidence.schema.json` **sí** está allowlisted | README no debe enlazar threat/assurance como si existieran en el remoto |
 
 **Inventario pendiente (Fase 0):** eficacia de políticas, EIPD workspace vs pack estático, monitor de deriva, hash de artefactos cuando el sidecar existe. Este documento no los da por verificados.
 

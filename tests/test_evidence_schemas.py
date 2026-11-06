@@ -63,3 +63,7 @@ def test_reporting_generator_emits_assurance_fields():
     assert "control_tested" in report["eu_ai_act_compliance"]
     assert "assurance_level" in report["explainability_compliance"]
     assert report["explainability_compliance"]["evidence_available"] is True
+    assert report["gdpr"]["compliance_status"] == "not_a_legal_determination"
+    assert report["gdpr"]["assurance_level"] == "evidence_only"
+    assert report["gdpr"]["review_required"] is True
+    assert "gdpr_compliant" not in json.dumps(report)

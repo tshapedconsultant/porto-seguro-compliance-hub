@@ -268,13 +268,13 @@ Proxy-based bias audits when sensitive demographics cannot be collected under pr
 
 ![Demographic Parity and Equalized Odds Verification Table](porto4.png)
 
-| Protected attribute (proxy) | Observed Δ (parity) | Significant (p<0.05) | Equalized odds | Screening |
-|-----------------------------|---------------------|-------------------------|----------------|-----------|
-| `risk_proxy_ps_ind_03` | 0.0011 | no | TPR Δ 0.0075 / FPR Δ 0.0008 | pass |
-| `region_proxy_ps_reg_03` | 0.0419 | **yes** | TPR Δ 0.0925 / FPR Δ 0.0400 | pass_with_review |
-| `vehicle_proxy_ps_car_13` | 0.0594 | **yes** | TPR Δ 0.0942 / FPR Δ 0.0559 | pass_with_review |
+| Protected attribute (proxy) | Observed Δ (parity) | Significant (parity) | TPR screening | FPR screening |
+|-----------------------------|---------------------|----------------------|---------------|---------------|
+| `risk_proxy_ps_ind_03` | 0.0011 | no | pass (Δ 0.0075, not sig) | pass (Δ 0.0008, not sig) |
+| `region_proxy_ps_reg_03` | 0.0419 | **yes** | pass_with_review (Δ 0.0925, not sig, near 10%) | pass_with_review (Δ 0.0400, **sig**) |
+| `vehicle_proxy_ps_car_13` | 0.0594 | **yes** | pass_with_review (Δ 0.0942, not sig, near 10%) | pass_with_review (Δ 0.0559, **sig**) |
 
-`overall_assessment`: **review_required**. The 10% gate is an internal heuristic, not a legal threshold. Significant 4–6% parity gaps and ~9.3% TPR gaps are not a silent pass.
+`overall_assessment`: **review_required**. The 10% gate is an internal heuristic, not a legal threshold. Significant 4–6% parity gaps, ~9.3% TPR gaps near the gate, and significant FPR gaps are not a silent pass. TPR and FPR are screened separately. `statistically_significant: false` is used only when chi-square actually ran (`test_method` / `statistical_tests`); otherwise the field is `null` with `significance_status: not_tested`. `positive_rate_ratio` is max/min predicted-positive rate: vehicle 8.16% / 2.22% = **3.68×**; region 7.05% / 2.86% = **2.46×**.
 
 ---
 

@@ -144,7 +144,10 @@
               "status": "computed",
               "highest_positive_rate_group": "above_median",
               "lowest_positive_rate_group": "below_median",
+              "highest_positive_prediction_rate": 0.05235510418490632,
+              "lowest_positive_prediction_rate": 0.05129400792725577,
               "positive_rate_ratio": 1.0206865538593783,
+              "positive_rate_ratio_formula": "highest_positive_prediction_rate / lowest_positive_prediction_rate",
               "extra_flags_vs_lowest_group": 6.0599207274422975,
               "groups": {
                 "above_median": {
@@ -161,7 +164,10 @@
               "potential_harm": "Group 'above_median' is flagged positive 0.11% more often than 'below_median' (~6 extra flags on n=5711). In an underwriting analogue this can mean tighter terms; this is not a legal harm assessment.",
               "not_a_legal_harm_assessment": true
             },
-            "alerts": []
+            "alerts": [],
+            "significance_status": "tested",
+            "test_method": "chi_square_independence",
+            "test_evidence_ref": "statistical_test"
           },
           "region_proxy_ps_reg_03": {
             "attribute": "region_proxy_ps_reg_03",
@@ -199,7 +205,10 @@
               "status": "computed",
               "highest_positive_rate_group": "high",
               "lowest_positive_rate_group": "low",
+              "highest_positive_prediction_rate": 0.07045601901880268,
+              "lowest_positive_prediction_rate": 0.028603268945022287,
               "positive_rate_ratio": 2.4632156259560625,
+              "positive_rate_ratio_formula": "highest_positive_prediction_rate / lowest_positive_prediction_rate",
               "extra_flags_vs_lowest_group": 193.65267459138187,
               "groups": {
                 "high": {
@@ -223,7 +232,10 @@
             },
             "alerts": [
               "Chi-square is statistically significant while the 10% governance gate is still met. This is not a silent pass."
-            ]
+            ],
+            "significance_status": "tested",
+            "test_method": "chi_square_independence",
+            "test_evidence_ref": "statistical_test"
           },
           "vehicle_proxy_ps_car_13": {
             "attribute": "vehicle_proxy_ps_car_13",
@@ -256,7 +268,10 @@
               "status": "computed",
               "highest_positive_rate_group": "above_median",
               "lowest_positive_rate_group": "below_median",
+              "highest_positive_prediction_rate": 0.0816,
+              "lowest_positive_prediction_rate": 0.0222,
               "positive_rate_ratio": 3.675675675675676,
+              "positive_rate_ratio_formula": "highest_positive_prediction_rate / lowest_positive_prediction_rate",
               "extra_flags_vs_lowest_group": 297.00000000000006,
               "groups": {
                 "above_median": {
@@ -275,7 +290,10 @@
             },
             "alerts": [
               "Chi-square is statistically significant while the 10% governance gate is still met. This is not a silent pass."
-            ]
+            ],
+            "significance_status": "tested",
+            "test_method": "chi_square_independence",
+            "test_evidence_ref": "statistical_test"
           }
         },
         "violations": [],
@@ -326,7 +344,10 @@
               "status": "computed",
               "highest_positive_rate_group": "above_median",
               "lowest_positive_rate_group": "below_median",
+              "highest_positive_prediction_rate": 0.05235510418490632,
+              "lowest_positive_prediction_rate": 0.05129400792725577,
               "positive_rate_ratio": 1.0206865538593783,
+              "positive_rate_ratio_formula": "highest_positive_prediction_rate / lowest_positive_prediction_rate",
               "extra_flags_vs_lowest_group": 6.0599207274422975,
               "groups": {
                 "below_median": {
@@ -363,7 +384,50 @@
               },
               "note": "Compares predicted-positive rate to observed claim rate at the decision threshold. Not score-level ECE."
             },
-            "alerts": []
+            "alerts": [],
+            "statistical_tests": {
+              "tpr": {
+                "method": "chi_square_independence",
+                "contingency": [
+                  [
+                    32,
+                    117
+                  ],
+                  [
+                    44,
+                    154
+                  ]
+                ],
+                "skipped": false,
+                "chi2_statistic": 0.0012348125612690573,
+                "p_value": 0.9719681855685698,
+                "significant": false
+              },
+              "fpr": {
+                "method": "chi_square_independence",
+                "contingency": [
+                  [
+                    188,
+                    3952
+                  ],
+                  [
+                    255,
+                    5258
+                  ]
+                ],
+                "skipped": false,
+                "chi2_statistic": 0.021583068107773367,
+                "p_value": 0.8832016617652625,
+                "significant": false
+              }
+            },
+            "tpr_screening_result": "pass",
+            "fpr_screening_result": "pass",
+            "tpr_statistically_significant": false,
+            "fpr_statistically_significant": false,
+            "significance_status": "tested",
+            "test_method": "chi_square_independence_on_tpr_fpr_confusion_counts",
+            "test_evidence_ref": "statistical_tests"
           },
           "region_proxy_ps_reg_03": {
             "attribute": "region_proxy_ps_reg_03",
@@ -405,7 +469,7 @@
             "tpr_difference": 0.09254864736592314,
             "fpr_difference": 0.039972703452626976,
             "observed_difference": 0.09254864736592314,
-            "statistically_significant": false,
+            "statistically_significant": true,
             "governance_threshold": 0.1,
             "governance_threshold_met": true,
             "odds_screening_result": "pass_with_review",
@@ -414,7 +478,10 @@
               "status": "computed",
               "highest_positive_rate_group": "high",
               "lowest_positive_rate_group": "low",
+              "highest_positive_prediction_rate": 0.07045601901880268,
+              "lowest_positive_prediction_rate": 0.028603268945022287,
               "positive_rate_ratio": 2.4632156259560625,
+              "positive_rate_ratio_formula": "highest_positive_prediction_rate / lowest_positive_prediction_rate",
               "extra_flags_vs_lowest_group": 193.65267459138187,
               "groups": {
                 "low": {
@@ -463,8 +530,60 @@
               "note": "Compares predicted-positive rate to observed claim rate at the decision threshold. Not score-level ECE."
             },
             "alerts": [
-              "Equalized-odds gap 9.25% is close to the 10% governance threshold."
-            ]
+              "FPR chi-square is significant while the 10% governance gate is still met. This is not a silent pass.",
+              "TPR gap 9.25% is close to the 10% governance threshold."
+            ],
+            "statistical_tests": {
+              "tpr": {
+                "method": "chi_square_independence",
+                "contingency": [
+                  [
+                    16,
+                    61
+                  ],
+                  [
+                    16,
+                    82
+                  ],
+                  [
+                    44,
+                    128
+                  ]
+                ],
+                "skipped": false,
+                "chi2_statistic": 3.1990643529219245,
+                "p_value": 0.20199099203509005,
+                "significant": false
+              },
+              "fpr": {
+                "method": "chi_square_independence",
+                "contingency": [
+                  [
+                    61,
+                    2554
+                  ],
+                  [
+                    100,
+                    2483
+                  ],
+                  [
+                    282,
+                    4173
+                  ]
+                ],
+                "skipped": false,
+                "chi2_statistic": 64.27923932602371,
+                "p_value": 1.1013884805821164e-14,
+                "significant": true
+              }
+            },
+            "tpr_screening_result": "pass_with_review",
+            "fpr_screening_result": "pass_with_review",
+            "tpr_statistically_significant": false,
+            "fpr_statistically_significant": true,
+            "significance_status": "tested",
+            "test_method": "chi_square_independence_on_tpr_fpr_confusion_counts",
+            "test_evidence_ref": "statistical_tests"
           },
           "vehicle_proxy_ps_car_13": {
             "attribute": "vehicle_proxy_ps_car_13",
@@ -495,7 +614,7 @@
             "tpr_difference": 0.09416098602217171,
             "fpr_difference": 0.05594017458366829,
             "observed_difference": 0.09416098602217171,
-            "statistically_significant": false,
+            "statistically_significant": true,
             "governance_threshold": 0.1,
             "governance_threshold_met": true,
             "odds_screening_result": "pass_with_review",
@@ -504,7 +623,10 @@
               "status": "computed",
               "highest_positive_rate_group": "above_median",
               "lowest_positive_rate_group": "below_median",
+              "highest_positive_prediction_rate": 0.0816,
+              "lowest_positive_prediction_rate": 0.0222,
               "positive_rate_ratio": 3.675675675675676,
+              "positive_rate_ratio_formula": "highest_positive_prediction_rate / lowest_positive_prediction_rate",
               "extra_flags_vs_lowest_group": 297.00000000000006,
               "groups": {
                 "below_median": {
@@ -542,14 +664,62 @@
               "note": "Compares predicted-positive rate to observed claim rate at the decision threshold. Not score-level ECE."
             },
             "alerts": [
-              "Equalized-odds gap 9.42% is close to the 10% governance threshold."
-            ]
+              "FPR chi-square is significant while the 10% governance gate is still met. This is not a silent pass.",
+              "TPR gap 9.42% is close to the 10% governance threshold.",
+              "TPR chi-square p=0.051 is above alpha=0.05 and is not marked significant."
+            ],
+            "statistical_tests": {
+              "tpr": {
+                "method": "chi_square_independence",
+                "contingency": [
+                  [
+                    23,
+                    118
+                  ],
+                  [
+                    53,
+                    153
+                  ]
+                ],
+                "skipped": false,
+                "chi2_statistic": 3.805826440833392,
+                "p_value": 0.0510745650893281,
+                "significant": false
+              },
+              "fpr": {
+                "method": "chi_square_independence",
+                "contingency": [
+                  [
+                    88,
+                    4771
+                  ],
+                  [
+                    355,
+                    4439
+                  ]
+                ],
+                "skipped": false,
+                "chi2_statistic": 171.18603852082393,
+                "p_value": 4.075012893239016e-39,
+                "significant": true
+              }
+            },
+            "tpr_screening_result": "pass_with_review",
+            "fpr_screening_result": "pass_with_review",
+            "tpr_statistically_significant": false,
+            "fpr_statistically_significant": true,
+            "significance_status": "tested",
+            "test_method": "chi_square_independence_on_tpr_fpr_confusion_counts",
+            "test_evidence_ref": "statistical_tests"
           }
         },
         "violations": [],
         "alerts": [
-          "Equalized-odds gap 9.25% is close to the 10% governance threshold.",
-          "Equalized-odds gap 9.42% is close to the 10% governance threshold."
+          "FPR chi-square is significant while the 10% governance gate is still met. This is not a silent pass.",
+          "TPR gap 9.25% is close to the 10% governance threshold.",
+          "FPR chi-square is significant while the 10% governance gate is still met. This is not a silent pass.",
+          "TPR gap 9.42% is close to the 10% governance threshold.",
+          "TPR chi-square p=0.051 is above alpha=0.05 and is not marked significant."
         ]
       },
       "classification_threshold": 0.06218303673820481,
@@ -563,7 +733,7 @@
       "overall_assessment": "review_required",
       "layers": {
         "observed_difference": "Always reported (max group rate − min group rate).",
-        "statistical_significance": "Chi-square on the relevant 2×K table when cell counts allow; p < 0.05 ⇒ statistically_significant=true. Independent of the 10% gate.",
+        "statistical_significance": "true = a named test ran and p < 0.05. false = a named test ran and was not significant (see test_method / test_evidence_ref). null = not_tested or skipped — never read as 'tested, not significant'. Independent of the 10% gate. TPR and FPR are tested and screened separately.",
         "governance_threshold": "Internal 10pp absolute screen (see governance_threshold policy). threshold_met is not a fairness certificate.",
         "business_decision": "Not inferred by this module. overall_assessment is screening only; deployment, pricing, or threshold changes require a named owner."
       },

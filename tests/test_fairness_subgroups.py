@@ -31,6 +31,9 @@ def test_screening_layers_are_independent():
     assert classify_screening_result(0.04, False) == "monitor"
     assert classify_screening_result(0.001, False) == "pass"
     assert classify_screening_result(0.12, False) == "fail"
+    assert classify_screening_result(0.04, None) == "monitor"
+    assert classify_screening_result(0.094, None) == "pass_with_review"
+    assert classify_screening_result(0.001, None) == "pass"
 
 
 def test_overall_assessment_never_silent_pass():
@@ -96,6 +99,13 @@ def test_equalized_odds_detects_tpr_fpr_gap():
     assert result["overall_equality"] is False
     assert attr["tpr_difference"] > 0.5 or attr["fpr_difference"] > 0.5
     assert attr["odds_screening_result"] == "fail"
+    assert attr["tpr_screening_result"] in {"fail", "pass_with_review", "monitor", "pass"}
+    assert attr["fpr_screening_result"] in {"fail", "pass_with_review", "monitor", "pass"}
+    assert attr["significance_status"] == "tested"
+    assert attr["test_method"]
+    assert attr["test_evidence_ref"] == "statistical_tests"
+    assert "tpr" in attr["statistical_tests"]
+    assert "fpr" in attr["statistical_tests"]
     assert "equality_met" not in attr
     assert len(result["violations"]) >= 1
     assert "calibration" in attr
@@ -158,6 +168,12 @@ def test_annotate_published_numbers_are_review_required():
     assert "parity_met" not in region
     vehicle_eo = out["equalized_odds"]["attribute_tests"]["vehicle_proxy_ps_car_13"]
     assert vehicle_eo["odds_screening_result"] == "pass_with_review"
+    assert vehicle_eo["tpr_screening_result"] == "pass_with_review"
+    assert vehicle_eo["fpr_screening_result"] == "monitor"
+    assert vehicle_eo["statistically_significant"] is None
+    assert vehicle_eo["significance_status"] == "not_tested"
+    assert vehicle_eo["test_method"] is None
+    assert vehicle_eo["test_evidence_ref"] is None
     assert out["governance_threshold"]["value"] == GOVERNANCE_THRESHOLD
     assert out["business_decision"]["status"] == "not_taken"
     assert "observed_difference" in out["layers"]
@@ -174,3 +190,33 @@ def test_published_conformity_pack_uses_screening_not_binary_pass():
     assert region["statistically_significant"] is True
     assert region["governance_threshold_met"] is True
     assert "parity_met" not in region
+    region_eo = fairness["equalized_odds"]["attribute_tests"]["region_proxy_ps_reg_03"]
+    vehicle_eo = fairness["equalized_odds"]["attribute_tests"]["vehicle_proxy_ps_car_13"]
+    risk_eo = fairness["equalized_odds"]["attribute_tests"]["risk_proxy_ps_ind_03"]
+    assert region_eo["tpr_screening_result"] == "pass_with_review"
+    assert region_eo["fpr_screening_result"] == "pass_with_review"
+    assert region_eo["tpr_statistically_significant"] is False
+    assert region_eo["fpr_statistically_significant"] is True
+    assert region_eo["statistically_significant"] is True
+    assert region_eo["significance_status"] == "tested"
+    assert region_eo["test_method"]
+    assert region_eo["test_evidence_ref"] == "statistical_tests"
+    assert region_eo["statistical_tests"]["fpr"]["significant"] is True
+    assert vehicle_eo["tpr_screening_result"] == "pass_with_review"
+    assert vehicle_eo["fpr_screening_result"] == "pass_with_review"
+    assert vehicle_eo["tpr_statistically_significant"] is False
+    assert vehicle_eo["fpr_statistically_significant"] is True
+    assert vehicle_eo["significance_status"] == "tested"
+    assert vehicle_eo["test_evidence_ref"] == "statistical_tests"
+    assert risk_eo["statistically_significant"] is False
+    assert risk_eo["significance_status"] == "tested"
+    assert risk_eo["test_method"]
+    vehicle_impact = fairness["demographic_parity"]["attribute_tests"]["vehicle_proxy_ps_car_13"]["impact"]
+    region_impact = fairness["demographic_parity"]["attribute_tests"]["region_proxy_ps_reg_03"]["impact"]
+    assert vehicle_impact["positive_rate_ratio_formula"] == (
+        "highest_positive_prediction_rate / lowest_positive_prediction_rate"
+    )
+    assert abs(vehicle_impact["positive_rate_ratio"] - (0.0816 / 0.0222)) < 1e-9
+    assert abs(region_impact["positive_rate_ratio"] - (0.07045601901880268 / 0.028603268945022287)) < 1e-9
+    assert 3.67 < vehicle_impact["positive_rate_ratio"] < 3.68
+    assert 2.46 < region_impact["positive_rate_ratio"] < 2.47

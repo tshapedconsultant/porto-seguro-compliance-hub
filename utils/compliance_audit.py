@@ -333,22 +333,30 @@ def bias_audit_to_dataframe(bias_audit: dict) -> pd.DataFrame:
         eq_status = eq_info.get("odds_screening_result") or (
             "pass" if eq_info.get("equality_met") else "fail"
         )
-        significant = bool(
-            info.get("statistically_significant") or eq_info.get("statistically_significant")
-        )
+        tpr_status = eq_info.get("tpr_screening_result") or "—"
+        fpr_status = eq_info.get("fpr_screening_result") or "—"
+        parity_sig = info.get("statistically_significant")
+        eo_sig = eq_info.get("statistically_significant")
         if degenerate:
             status = "⚠️ Invalid (no positive predictions)"
         else:
             status = f"{parity_status} / {eq_status}"
-            if significant:
+            if parity_sig is True or eo_sig is True:
                 status += " · significant"
+        if parity_sig is True:
+            sig_label = "yes"
+        elif parity_sig is False:
+            sig_label = "no"
+        else:
+            sig_label = "not tested"
         rows.append(
             {
                 "Protected Attribute": attr_name,
                 "Observed Δ (parity)": f"{info.get('observed_difference', info.get('max_difference', 0)):.4f}",
-                "Statistically significant": "yes" if significant else "no",
+                "Statistically significant": sig_label,
                 "Equalized odds Δ": (
-                    f"TPR {eq_info.get('tpr_difference', 0):.4f} / FPR {eq_info.get('fpr_difference', 0):.4f}"
+                    f"TPR {eq_info.get('tpr_difference', 0):.4f} ({tpr_status}) / "
+                    f"FPR {eq_info.get('fpr_difference', 0):.4f} ({fpr_status})"
                 ),
                 "Screening": status,
             }

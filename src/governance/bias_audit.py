@@ -64,11 +64,16 @@ GOVERNANCE_THRESHOLD_POLICY: Dict[str, Any] = {
     "monitor_band": MONITOR_BAND,
 }
 
+EO_TEST_METHOD = "chi_square_independence_on_tpr_fpr_confusion_counts"
+EO_TEST_EVIDENCE_REF = "statistical_tests"
+
 LAYER_DEFINITIONS: Dict[str, str] = {
     "observed_difference": "Always reported (max group rate − min group rate).",
     "statistical_significance": (
-        f"Chi-square on the relevant 2×K table when cell counts allow; "
-        f"p < {SIGNIFICANCE_ALPHA} ⇒ statistically_significant=true. Independent of the 10% gate."
+        f"true = a named test ran and p < {SIGNIFICANCE_ALPHA}. "
+        "false = a named test ran and was not significant (see test_method / test_evidence_ref). "
+        "null = not_tested or skipped — never read as 'tested, not significant'. "
+        "Independent of the 10% gate. TPR and FPR are tested and screened separately."
     ),
     "governance_threshold": (
         "Internal 10pp absolute screen (see governance_threshold policy). "
@@ -83,7 +88,7 @@ LAYER_DEFINITIONS: Dict[str, str] = {
 
 def classify_screening_result(
     observed_difference: float,
-    statistically_significant: bool,
+    statistically_significant: Optional[bool] = False,
     threshold: float = GOVERNANCE_THRESHOLD,
 ) -> str:
     """
@@ -93,12 +98,15 @@ def classify_screening_result(
     pass_with_review  → gate met, but significant or within 20% of the gate
     monitor           → smaller material gap, not significant
     pass              → below the watch-band and not significant
+
+    statistically_significant must be True to upgrade a mid-band gap.
+    False means tested and not significant. None / not_tested does not upgrade.
     """
     observed = abs(float(observed_difference))
     if observed > threshold:
         return "fail"
     near = threshold * NEAR_THRESHOLD_RATIO
-    if statistically_significant or observed >= near:
+    if statistically_significant is True or observed >= near:
         return "pass_with_review"
     if observed >= MONITOR_BAND:
         return "monitor"
@@ -132,18 +140,28 @@ def derive_overall_assessment(
 
 def _chi2_test_if_valid(contingency_rows: List[List[int]]) -> Dict[str, Any]:
     """Run chi-square only when all marginal cell counts are statistically adequate."""
+    base: Dict[str, Any] = {
+        "method": "chi_square_independence",
+        "contingency": [list(row) for row in contingency_rows],
+    }
     if len(contingency_rows) < 2:
-        return {"skipped": True, "reason": "fewer than two groups", "significant": False}
+        return {**base, "skipped": True, "reason": "fewer than two groups", "significant": None}
 
     for row in contingency_rows:
         if sum(row) < MIN_CHI2_CELL_COUNT:
-            return {"skipped": True, "reason": "insufficient group sample size", "significant": False}
+            return {**base, "skipped": True, "reason": "insufficient group sample size", "significant": None}
 
     try:
         chi2, p_value, _dof, expected = stats.chi2_contingency(contingency_rows)
         if np.any(expected < MIN_CHI2_CELL_COUNT):
-            return {"skipped": True, "reason": "expected cell frequencies below minimum", "significant": False}
+            return {
+                **base,
+                "skipped": True,
+                "reason": "expected cell frequencies below minimum",
+                "significant": None,
+            }
         return {
+            **base,
             "skipped": False,
             "chi2_statistic": float(chi2),
             "p_value": float(p_value),
@@ -151,7 +169,48 @@ def _chi2_test_if_valid(contingency_rows: List[List[int]]) -> Dict[str, Any]:
         }
     except Exception as exc:
         logger.warning("Chi-square test failed: %s", exc)
-        return {"skipped": True, "reason": str(exc), "significant": False}
+        return {**base, "skipped": True, "reason": str(exc), "significant": None}
+
+
+def _tested_significance(test: Optional[Dict[str, Any]]) -> Optional[bool]:
+    """True/false only when a test actually ran. None = not_tested or skipped."""
+    if not isinstance(test, dict) or not test:
+        return None
+    if test.get("skipped"):
+        return None
+    if "significant" not in test:
+        return None
+    sig = test.get("significant")
+    if sig is None:
+        return None
+    return bool(sig)
+
+
+def _confusion_odds_tables(groups: Dict[str, Any]) -> Dict[str, List[List[int]]]:
+    tpr_table: List[List[int]] = []
+    fpr_table: List[List[int]] = []
+    for info in groups.values():
+        if not isinstance(info, dict):
+            continue
+        cm = info.get("confusion_matrix") or {}
+        if not cm:
+            continue
+        tpr_table.append([int(cm.get("tp", 0)), int(cm.get("fn", 0))])
+        fpr_table.append([int(cm.get("fp", 0)), int(cm.get("tn", 0))])
+    return {"tpr": tpr_table, "fpr": fpr_table}
+
+
+def _ensure_odds_statistical_tests(attr_results: Dict[str, Any]) -> None:
+    tests = attr_results.get("statistical_tests")
+    if isinstance(tests, dict) and isinstance(tests.get("tpr"), dict) and isinstance(tests.get("fpr"), dict):
+        return
+    tables = _confusion_odds_tables(attr_results.get("groups") or {})
+    if len(tables["tpr"]) < 2 and len(tables["fpr"]) < 2:
+        return
+    attr_results["statistical_tests"] = {
+        "tpr": _chi2_test_if_valid(tables["tpr"]),
+        "fpr": _chi2_test_if_valid(tables["fpr"]),
+    }
 
 
 def _ece_numpy(y_true: np.ndarray, y_score: np.ndarray, n_bins: int = 10) -> Optional[float]:
@@ -235,7 +294,10 @@ def _impact_from_groups(groups: Dict[str, Dict[str, Any]]) -> Dict[str, Any]:
         "status": "computed",
         "highest_positive_rate_group": high,
         "lowest_positive_rate_group": low,
+        "highest_positive_prediction_rate": float(rates[high]),
+        "lowest_positive_prediction_rate": float(rates[low]),
         "positive_rate_ratio": None if ratio is None else float(ratio),
+        "positive_rate_ratio_formula": "highest_positive_prediction_rate / lowest_positive_prediction_rate",
         "extra_flags_vs_lowest_group": float(extra_flags),
         "groups": per_group,
         "potential_harm": (
@@ -318,10 +380,18 @@ def _apply_parity_screening(attr_results: Dict[str, Any], threshold: float) -> N
     """Attach the four layers to a demographic-parity attribute payload."""
     observed = float(attr_results.get("max_difference") or 0.0)
     test = attr_results.get("statistical_test") or {}
-    significant = bool(test.get("significant")) and not test.get("skipped", False)
+    significant = _tested_significance(test)
     screening = classify_screening_result(observed, significant, threshold)
     attr_results["observed_difference"] = observed
     attr_results["statistically_significant"] = significant
+    if significant is None:
+        attr_results["significance_status"] = "skipped" if test.get("skipped") else "not_tested"
+        attr_results["test_method"] = None
+        attr_results["test_evidence_ref"] = None
+    else:
+        attr_results["significance_status"] = "tested"
+        attr_results["test_method"] = test.get("method") or "chi_square_independence"
+        attr_results["test_evidence_ref"] = "statistical_test"
     attr_results["governance_threshold"] = threshold
     attr_results["governance_threshold_met"] = observed <= threshold
     attr_results["parity_screening_result"] = screening
@@ -329,7 +399,7 @@ def _apply_parity_screening(attr_results: Dict[str, Any], threshold: float) -> N
     attr_results.pop("parity_met", None)
     attr_results["impact"] = _impact_from_groups(attr_results.get("groups") or {})
     alerts: List[str] = []
-    if significant and screening != "fail":
+    if significant is True and screening != "fail":
         alerts.append(
             "Chi-square is statistically significant while the 10% governance gate is still met. "
             "This is not a silent pass."
@@ -340,32 +410,88 @@ def _apply_parity_screening(attr_results: Dict[str, Any], threshold: float) -> N
 
 
 def _apply_odds_screening(attr_results: Dict[str, Any], threshold: float) -> None:
+    _ensure_odds_statistical_tests(attr_results)
     tpr_diff = float(attr_results.get("tpr_difference") or 0.0)
     fpr_diff = float(attr_results.get("fpr_difference") or 0.0)
     observed = max(tpr_diff, fpr_diff)
-    tests = attr_results.get("statistical_tests") or {}
-    significant = any(
-        bool((tests.get(name) or {}).get("significant"))
-        and not (tests.get(name) or {}).get("skipped", False)
-        for name in ("tpr", "fpr")
-    )
-    screening = classify_screening_result(observed, significant, threshold)
+    tests = attr_results.get("statistical_tests") if isinstance(attr_results.get("statistical_tests"), dict) else {}
+    tpr_test = (tests or {}).get("tpr") if tests else None
+    fpr_test = (tests or {}).get("fpr") if tests else None
+    tpr_sig = _tested_significance(tpr_test if isinstance(tpr_test, dict) else None)
+    fpr_sig = _tested_significance(fpr_test if isinstance(fpr_test, dict) else None)
+    tpr_screening = classify_screening_result(tpr_diff, tpr_sig, threshold)
+    fpr_screening = classify_screening_result(fpr_diff, fpr_sig, threshold)
+    screening = _worse_screening(tpr_screening, fpr_screening)
+    tested_flags = [flag for flag in (tpr_sig, fpr_sig) if flag is not None]
+    if not tests:
+        significance_status = "not_tested"
+        overall_sig: Optional[bool] = None
+        test_method: Optional[str] = None
+        test_evidence_ref: Optional[str] = None
+    elif not tested_flags:
+        significance_status = "skipped"
+        overall_sig = None
+        test_method = EO_TEST_METHOD
+        test_evidence_ref = EO_TEST_EVIDENCE_REF
+    else:
+        significance_status = "tested"
+        overall_sig = any(tested_flags)
+        test_method = EO_TEST_METHOD
+        test_evidence_ref = EO_TEST_EVIDENCE_REF
+
     attr_results["observed_difference"] = observed
-    attr_results["statistically_significant"] = significant
+    attr_results["tpr_screening_result"] = tpr_screening
+    attr_results["fpr_screening_result"] = fpr_screening
+    attr_results["odds_screening_result"] = screening
+    attr_results["tpr_statistically_significant"] = tpr_sig
+    attr_results["fpr_statistically_significant"] = fpr_sig
+    attr_results["statistically_significant"] = overall_sig
+    attr_results["significance_status"] = significance_status
+    attr_results["test_method"] = test_method
+    attr_results["test_evidence_ref"] = test_evidence_ref
     attr_results["governance_threshold"] = threshold
     attr_results["governance_threshold_met"] = observed <= threshold
-    attr_results["odds_screening_result"] = screening
     attr_results["business_decision"] = "not_taken"
     attr_results.pop("equality_met", None)
     attr_results["impact"] = _impact_from_groups(attr_results.get("groups") or {})
     attr_results["calibration"] = _calibration_from_confusion(attr_results.get("groups") or {})
     alerts: List[str] = []
-    if significant and screening != "fail":
-        alerts.append("TPR/FPR chi-square is significant below the 10% gate — not a silent pass.")
-    if observed >= threshold * NEAR_THRESHOLD_RATIO and observed <= threshold:
+    if tpr_sig is True and tpr_screening != "fail":
         alerts.append(
-            f"Equalized-odds gap {observed:.2%} is close to the {threshold:.0%} governance threshold."
+            "TPR chi-square is significant while the 10% governance gate is still met. "
+            "This is not a silent pass."
         )
+    if fpr_sig is True and fpr_screening != "fail":
+        alerts.append(
+            "FPR chi-square is significant while the 10% governance gate is still met. "
+            "This is not a silent pass."
+        )
+    near = threshold * NEAR_THRESHOLD_RATIO
+    if near <= tpr_diff <= threshold:
+        alerts.append(
+            f"TPR gap {tpr_diff:.2%} is close to the {threshold:.0%} governance threshold."
+        )
+    if near <= fpr_diff <= threshold:
+        alerts.append(
+            f"FPR gap {fpr_diff:.2%} is close to the {threshold:.0%} governance threshold."
+        )
+    if tpr_screening != fpr_screening:
+        alerts.append(
+            f"TPR screening is {tpr_screening} (Δ {tpr_diff:.2%}) and FPR screening is "
+            f"{fpr_screening} (Δ {fpr_diff:.2%}); they are not the same action."
+        )
+    for metric, test in (("TPR", tpr_test), ("FPR", fpr_test)):
+        if not isinstance(test, dict) or test.get("skipped"):
+            continue
+        p_value = test.get("p_value")
+        if p_value is None:
+            continue
+        p_value = float(p_value)
+        if SIGNIFICANCE_ALPHA <= p_value < 0.10:
+            alerts.append(
+                f"{metric} chi-square p={p_value:.3f} is above alpha={SIGNIFICANCE_ALPHA} "
+                "and is not marked significant."
+            )
     attr_results["alerts"] = alerts
 
 

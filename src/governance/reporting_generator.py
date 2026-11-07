@@ -87,6 +87,10 @@ def format_drift_monitoring_section(
                 "Run: python run_production_monitor.py"
             ),
         }
+        from src.monitoring.slo import build_monitoring_slo_report
+
+        # No drift payload yet: six SLOs as not_evaluated, not a silent pass.
+        base["monitoring_slos"] = build_monitoring_slo_report()
         base.update(
             build_assurance_fields(
                 evidence_available=False,
@@ -116,12 +120,26 @@ def format_drift_monitoring_section(
         "data_drift_detected": drift_report.get("data_drift", {}).get("drift_detected"),
         "model_drift_detected": drift_report.get("model_drift", {}).get("drift_detected"),
         "alerts": drift_report.get("alerts", []),
+        "monitoring_slos": drift_report.get("monitoring_slos"),
         "summary": (
             "Evaluated continuously via production_compliance_gate. "
             f"See {evidence_path.name} for current status. "
-            "Tile status is evidence language — not a conformity decision."
+            "Tile status is evidence language — not a conformity decision. "
+            "SLOs are technical detection, not a business or legal decision."
         ),
     }
+    if result["monitoring_slos"] is None:
+        from src.monitoring.slo import build_monitoring_slo_report
+
+        result["monitoring_slos"] = build_monitoring_slo_report(
+            data_drift=drift_report.get("data_drift"),
+            model_drift=drift_report.get("model_drift"),
+            production_gate={
+                "monitoring_passed": monitoring_passed,
+                "overall_status": overall,
+                "evidence_path": str(evidence_path),
+            },
+        )
     result.update(
         build_assurance_fields(
             evidence_available=True,

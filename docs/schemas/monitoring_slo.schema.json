@@ -1,0 +1,240 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://porto-seguro.local/schemas/monitoring_slo.schema.json",
+  "title": "Porto Seguro monitoring SLOs",
+  "description": "Operational monitoring SLOs. Technical detection is not a business decision, legal finding, or discrimination conclusion.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "generated_at",
+    "disclaimer",
+    "catalog_ref",
+    "slos",
+    "alerts",
+    "open_alert_count",
+    "business_decision",
+    "evidence_integrity"
+  ],
+  "properties": {
+    "schema_version": { "const": "1.0.0" },
+    "generated_at": { "type": "string", "minLength": 1 },
+    "disclaimer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "technical_detection_is_not_a_business_decision",
+        "not_a_legal_or_discrimination_finding",
+        "resolved_requires_evidence",
+        "text"
+      ],
+      "properties": {
+        "technical_detection_is_not_a_business_decision": { "const": true },
+        "not_a_legal_or_discrimination_finding": { "const": true },
+        "resolved_requires_evidence": { "const": true },
+        "text": { "type": "string" }
+      }
+    },
+    "catalog_ref": { "type": "string", "minLength": 1 },
+    "slos": {
+      "type": "array",
+      "minItems": 6,
+      "maxItems": 6,
+      "items": { "$ref": "#/definitions/slo" }
+    },
+    "alerts": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/alert" }
+    },
+    "open_alert_count": { "type": "integer", "minimum": 0 },
+    "business_decision": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "note"],
+      "properties": {
+        "status": { "const": "not_taken" },
+        "note": { "type": "string" }
+      }
+    },
+    "evidence_integrity": { "$ref": "#/definitions/evidence_integrity" }
+  },
+  "definitions": {
+    "evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "refs", "summary", "sufficient_to_resolve"],
+      "properties": {
+        "status": { "type": "string", "enum": ["missing", "available"] },
+        "refs": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "summary": { "type": "string" },
+        "sufficient_to_resolve": { "const": false }
+      }
+    },
+    "evidence_ref": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ref", "hash", "hash_scope", "file_present"],
+      "properties": {
+        "ref": { "type": "string", "minLength": 1 },
+        "hash": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+        "hash_scope": { "type": "string", "enum": ["file_bytes", "ref_string"] },
+        "file_present": { "type": "boolean" },
+        "note": { "type": "string" }
+      }
+    },
+    "evidence_integrity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "generated_at",
+        "artifact_hash",
+        "hash_alg",
+        "canonicalization",
+        "evidence_refs",
+        "not_a_cryptographic_signature",
+        "not_worm"
+      ],
+      "properties": {
+        "schema_version": { "const": "1.0.0" },
+        "generated_at": { "type": "string", "minLength": 1 },
+        "artifact_hash": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+        "hash_alg": { "const": "sha256" },
+        "canonicalization": { "type": "string" },
+        "evidence_refs": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/evidence_ref" }
+        },
+        "not_a_cryptographic_signature": { "const": true },
+        "not_worm": { "const": true }
+      }
+    },
+    "alert": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "slo_id",
+        "condition",
+        "severity",
+        "owner",
+        "owner_role",
+        "required_action",
+        "deadline",
+        "deadline_at",
+        "evidence",
+        "status",
+        "resolved_requires_evidence",
+        "detection_layer",
+        "business_decision",
+        "not_a_legal_finding",
+        "not_a_discrimination_finding"
+      ],
+      "properties": {
+        "slo_id": {
+          "type": "string",
+          "enum": [
+            "mon.ks_drift",
+            "mon.performance_degradation",
+            "mon.calibration_drift",
+            "mon.fairness_screening",
+            "mon.shadow_monitor",
+            "mon.production_gate"
+          ]
+        },
+        "condition": { "type": "string", "minLength": 1 },
+        "severity": { "type": "string", "enum": ["critical", "high", "medium", "low"] },
+        "owner": { "type": "string", "minLength": 1 },
+        "owner_role": { "type": "string", "minLength": 1 },
+        "required_action": { "type": "string", "minLength": 1 },
+        "deadline": { "type": "string", "enum": ["P1D", "P2D", "P5D"] },
+        "deadline_at": { "type": "string", "minLength": 1 },
+        "evidence": { "$ref": "#/definitions/evidence" },
+        "status": {
+          "type": "string",
+          "enum": ["open", "acknowledged", "in_progress", "resolved"]
+        },
+        "resolved_requires_evidence": { "const": true },
+        "detection_layer": { "const": "technical" },
+        "business_decision": { "const": "not_taken" },
+        "not_a_legal_finding": { "const": true },
+        "not_a_discrimination_finding": { "const": true },
+        "resolution_evidence": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["refs", "note", "resolved_at", "business_decision_still_not_taken"],
+          "properties": {
+            "refs": {
+              "type": "array",
+              "minItems": 1,
+              "items": { "type": "string", "minLength": 1 }
+            },
+            "note": { "type": "string" },
+            "resolved_at": { "type": "string" },
+            "business_decision_still_not_taken": { "const": true }
+          }
+        }
+      }
+    },
+    "slo": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "slo_id",
+        "name",
+        "signal",
+        "condition",
+        "severity",
+        "owner",
+        "owner_role",
+        "required_action",
+        "deadline",
+        "evidence",
+        "status",
+        "alert",
+        "detection_layer",
+        "business_decision",
+        "not_a_legal_finding",
+        "not_a_discrimination_finding"
+      ],
+      "properties": {
+        "slo_id": {
+          "type": "string",
+          "enum": [
+            "mon.ks_drift",
+            "mon.performance_degradation",
+            "mon.calibration_drift",
+            "mon.fairness_screening",
+            "mon.shadow_monitor",
+            "mon.production_gate"
+          ]
+        },
+        "name": { "type": "string", "minLength": 1 },
+        "signal": { "type": "string", "minLength": 1 },
+        "condition": { "type": "string", "minLength": 1 },
+        "severity": { "type": "string", "enum": ["critical", "high", "medium", "low"] },
+        "owner": { "type": "string", "minLength": 1 },
+        "owner_role": { "type": "string", "minLength": 1 },
+        "required_action": { "type": "string", "minLength": 1 },
+        "deadline": { "type": "string", "enum": ["P1D", "P2D", "P5D"] },
+        "evidence": { "$ref": "#/definitions/evidence" },
+        "status": {
+          "type": "string",
+          "enum": ["not_evaluated", "within_slo", "breached"]
+        },
+        "alert": {
+          "anyOf": [
+            { "type": "null" },
+            { "$ref": "#/definitions/alert" }
+          ]
+        },
+        "detection_layer": { "const": "technical" },
+        "business_decision": { "const": "not_inferred" },
+        "not_a_legal_finding": { "const": true },
+        "not_a_discrimination_finding": { "const": true }
+      }
+    }
+  }
+}

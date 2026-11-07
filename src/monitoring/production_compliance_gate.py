@@ -17,6 +17,7 @@ import polars as pl
 
 from src.monitoring.drift_monitoring import continuous_drift_monitoring
 from src.monitoring.performance_tracking import PerformanceTracker
+from src.monitoring.slo import attach_slos_to_gate_report
 
 logger = logging.getLogger(__name__)
 
@@ -121,7 +122,8 @@ def run_production_compliance_gate(
     drift_report["evidence_path"] = str(DRIFT_LATEST_PATH)
     drift_report["performance_history_path"] = str(history_path)
     drift_report["monitoring_passed"] = evidence["monitoring_passed"]
-    return drift_report
+    # SLOs are technical screens attached after the gate; they do not change monitoring_passed.
+    return attach_slos_to_gate_report(drift_report)
 
 
 def run_scheduled_production_monitor(

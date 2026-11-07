@@ -64,6 +64,16 @@ def test_generate_compliance_report():
     assert report["gdpr"]["compliance_status"] == "not_a_legal_determination"
     assert report["gdpr"]["review_required"] is True
     assert report["gdpr"]["evaluations"]["purposes_and_lawful_basis"]["findings"]["art6_lawful_basis"] == "unknown"
+    slos = report["responsible_ai_compliance"]["drift_monitoring"]["monitoring_slos"]
+    assert [item["slo_id"] for item in slos["slos"]] == [
+        "mon.ks_drift",
+        "mon.performance_degradation",
+        "mon.calibration_drift",
+        "mon.fairness_screening",
+        "mon.shadow_monitor",
+        "mon.production_gate",
+    ]
+    assert slos["business_decision"]["status"] == "not_taken"
 
 
 def test_generate_compliance_report_with_file():

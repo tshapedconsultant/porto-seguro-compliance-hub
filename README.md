@@ -37,7 +37,7 @@ flowchart TB
 
     subgraph MON["④ MONITORING LAYER"]
         direction LR
-        N1["KS drift · asymmetric alerts"]
+        N1["KS drift · operational SLOs"]
         N2["Shadow Monitor · off hot path"]
         N3["Production compliance gate · Art. 9"]
     end
@@ -63,7 +63,7 @@ flowchart TB
 | **Data** | Is the training data complete, representative, and leakage-free? | EU AI Act **Art. 10** |
 | **Model** | Can we explain every prediction to an underwriter or auditor? | EU AI Act **Art. 13** |
 | **Governance** | Is the model fair, robust, and subject to human review? | **Art. 14** · **Art. 15** |
-| **Monitoring** | Do we detect drift before it harms the portfolio? | EU AI Act **Art. 9** |
+| **Monitoring** | Do we detect drift before it harms the portfolio — without turning an alert into a legal finding? | EU AI Act **Art. 9** |
 | **Evidence** | Can we show technical evidence to reviewers and Solvency II stakeholders? | **Annex IV** · Solvency II (evidence ≠ certification) |
 
 ### What runs locally vs what is demo-only
@@ -77,7 +77,8 @@ flowchart TB
 | **Recorded walkthroughs** | `streamlit run app.py` → pages 09 / 10 | What each cut shows: table below. How to record: [`DEMO_RECORDING_220.md`](docs/governance/DEMO_RECORDING_220.md) |
 | **Inference API** | `python api_server.py` → `:8000` | `/predict` & `/batch_predict` wrapped by `execute_guarded` **in-process**; needs local artifacts for healthy inference |
 | **ML pipeline** | `run_training.py` / `run_training_full.py` | Polars → feature engineering → EBM → explainability → monitoring; needs Kaggle `train.csv` locally |
-| **CI governance job** | `.github/workflows/ci.yml` | Job `tests` (mandatory on every push/PR): control-plane + API security. Job `ml-synthetic` only on ML path changes, weekly cron, or `workflow_dispatch` — **no** `continue-on-error`; if that job runs and fails, the workflow fails |
+| **CI governance job** | `.github/workflows/ci.yml` | Job `tests` (mandatory on every push/PR): control-plane + API security + monitoring SLOs. Job `ml-synthetic` only on ML path changes, weekly cron, or `workflow_dispatch` — **no** `continue-on-error`; if that job runs and fails, the workflow fails |
+| **Monitoring SLOs** | `src/monitoring/slo.py` · [`docs/governance/MONITORING_SLOS.md`](docs/governance/MONITORING_SLOS.md) | KS, performance, calibration, fairness, shadow, production gate. Detection ≠ business/legal decision; alerts cannot be resolved without evidence |
 
 ### Walkthroughs (two cuts)
 
@@ -276,6 +277,25 @@ Proxy-based bias audits when sensitive demographics cannot be collected under pr
 
 `overall_assessment`: **review_required**. The 10% gate is an internal heuristic, not a legal threshold. Significant 4–6% parity gaps, ~9.3% TPR gaps near the gate, and significant FPR gaps are not a silent pass. TPR and FPR are screened separately. `statistically_significant: false` is used only when chi-square actually ran (`test_method` / `statistical_tests`); otherwise the field is `null` with `significance_status: not_tested`. `positive_rate_ratio` is max/min predicted-positive rate: vehicle 8.16% / 2.22% = **3.68×**; region 7.05% / 2.86% = **2.46×**.
 
+### 5. Operational monitoring SLOs
+
+Six screens in `src/monitoring/slo.py`. An open alert is **technical detection**, not a go-live, Art. 43, or discrimination finding. `resolve_alert` requires evidence refs. `evidence_integrity` is a SHA-256 of the report body plus per-ref hashes — **not** a signature or WORM store. See [`docs/governance/MONITORING_SLOS.md`](docs/governance/MONITORING_SLOS.md).
+
+| SLO | Condition (internal heuristic) | Severity | Deadline |
+|-----|--------------------------------|----------|----------|
+| `mon.ks_drift` | Feature or mean KS > 0.10 vs reference | high | P2D |
+| `mon.performance_degradation` | Relative drop > 5% vs hold-out baseline | high | P2D |
+| `mon.calibration_drift` | ECE or max abs. calibration error > 0.05 | medium | P5D |
+| `mon.fairness_screening` | `review_required` or fail / pass_with_review | high | P2D |
+| `mon.shadow_monitor` | Did not run, missing artifacts, or KS health check fired | medium | P2D |
+| `mon.production_gate` | `monitoring_passed` is false | critical | P1D |
+
+`not_evaluated` (no signal) is not `within_slo`. Owner is `unassigned` until a named person is recorded.
+
+```bash
+python -m pytest tests/test_monitoring_slos.py -q
+```
+
 ---
 
 ## Project Structure
@@ -295,14 +315,16 @@ porto-seguro/
 │   ├── models/                     # EBM, evaluation, explainability
 │   ├── governance/                 # Bias audit, EIPD workspace, GDPR evidence block, reporting
 │   ├── control_plane/              # Policies, approvals, runtime adapter
-│   └── monitoring/                 # Drift, production gate, tracker
+│   └── monitoring/                 # Drift, production gate, operational SLOs
 ├── pages/
 │   ├── 09_Governed_Decision_Demo.py
 │   └── 10_AEPD_EIPD_Demo.py        # EIPD ~90 s narrative (not Art. 36)
 ├── docs/governance/
+│   ├── MONITORING_SLOS.md          # SLO catalog, detection ≠ decision
 │   ├── DEMO_PLAYBOOK.md            # ES, AEPD-facing
 │   ├── DEMO_RECORDING_220.md       # How to record the two cuts
 │   └── demo_assets/                # architecture / lifecycle / hash-chain diagrams
+├── docs/schemas/                   # gdpr_evidence, monitoring_slo, monitoring_slo_alert
 ├── tests/                          # Governance CI + optional ML unit tests
 └── models/artifacts/               # Model, FE, threshold, SHA-256 (gitignored)
 ```
@@ -320,7 +342,7 @@ Demo playbook (Mermaid + scripts): [`docs/governance/DEMO_PLAYBOOK.md`](docs/gov
 pip install -r requirements_streamlit.txt -r requirements_api.txt
 pip install pytest pandas numpy
 # Same as CI job `tests` (governance + API security). Does not train; does not need train.csv.
-python -m pytest tests/test_dpia_workspace.py tests/test_control_plane.py tests/test_control_plane_security.py tests/test_api_security.py tests/test_import_surface.py -q
+python -m pytest tests/test_dpia_workspace.py tests/test_control_plane.py tests/test_control_plane_security.py tests/test_api_security.py tests/test_import_surface.py tests/test_gdpr_evidence.py tests/test_monitoring_slos.py -q
 streamlit run app.py
 ```
 

@@ -58,9 +58,12 @@ models/artifacts/quick/
 !docs/V2_ROADMAP.md
 !docs/schemas/
 !docs/schemas/gdpr_evidence.schema.json
+!docs/schemas/monitoring_slo.schema.json
+!docs/schemas/monitoring_slo_alert.schema.json
 !docs/governance/
 !docs/governance/LINE_REPORT.md
 !docs/governance/GDPR_EVIDENCE.md
+!docs/governance/MONITORING_SLOS.md
 !docs/governance/DEMO_PLAYBOOK.md
 !docs/governance/DEMO_*.md
 !docs/governance/INCIDENT_*.md

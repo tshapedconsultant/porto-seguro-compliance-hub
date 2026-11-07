@@ -31,7 +31,7 @@ Comando de verificación de línea (mismo que CI de gobernanza):
 ```bash
 pip install -r requirements_streamlit.txt -r requirements_api.txt
 pip install pytest pandas numpy
-python -m pytest tests/test_dpia_workspace.py tests/test_control_plane.py tests/test_control_plane_security.py tests/test_api_security.py tests/test_import_surface.py tests/test_gdpr_evidence.py -q
+python -m pytest tests/test_dpia_workspace.py tests/test_control_plane.py tests/test_control_plane_security.py tests/test_api_security.py tests/test_import_surface.py tests/test_gdpr_evidence.py tests/test_monitoring_slos.py -q
 ```
 
 Calendario Art. 113 (codificado, no fetch en vivo a EUR-Lex): `src/control_plane/regulatory_library.py` + fixture `tests/fixtures/ai_act_art113_oj_2024.json`. Hitos relevantes: aplicación general **2026-08-02**; Annex III high-risk **2027-12-02** (Reglamento (UE) 2026/1744).

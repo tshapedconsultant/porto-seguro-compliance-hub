@@ -274,6 +274,16 @@ def test_evidence_integrity_always_present():
     assert "cryptographic_signature" not in blob.replace("not_a_cryptographic_signature", "")
 
 
+def test_disclaimer_records_lab_limitations():
+    text = build_monitoring_slo_report()["disclaimer"]["text"].lower()
+    assert "unassigned" in text
+    assert "before production" in text
+    assert "forensic" in text
+    assert "rate limit" in text
+    assert "api key" in text
+    assert "notification" in text
+
+
 def test_healthy_ks_is_within_slo_not_a_pass_stamp():
     report = build_monitoring_slo_report(
         data_drift={

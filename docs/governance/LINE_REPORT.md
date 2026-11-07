@@ -19,6 +19,7 @@ Hechos en disco, no intenciones.
 | Model Card | `app.py` + `pages/*` | Arranca sin `train.csv` / `.pkl` (artefactos gitignored) |
 | API predicción | `api_server.py` `/predict` y `/batch_predict` | Pasan por `execute_guarded` **en este proceso**; rate limit in-memory demo; TRUST_PROXY con allowlist |
 | Pipeline ML | `src/data_processing/` → `src/models/` → `src/monitoring/` | Polars → FE → EBM → explainability → gate; scripts `run_training*.py` |
+| SLOs de monitoreo | `src/monitoring/slo.py` | Owner `unassigned` hasta asignación humana; hash local ≠ evidencia forense; sin routing de alertas; no cambia rate limit / API key |
 | Tests de borde | `tests/test_dpia_workspace.py`, `tests/test_control_plane.py`, `tests/test_control_plane_security.py`, `tests/test_api_security.py`, `tests/test_import_surface.py` | Mismos ficheros que el job CI `tests`; Streamlit + API (`polars`/`joblib`); REDACT anidado fail-closed; Annex III **2027-12-02** (tras 2026/1744) |
 | Tests ML (opcionales) | `tests/test_*` data/EBM/drift/explainability | En repo; skip si faltan `polars`/`interpret`; **no** son el job CI de gobernanza |
 | Persistencia EIPD | `docs/governance/assessments/*.json` | Local; **no** se publica en GitHub |
@@ -90,6 +91,7 @@ Clasificación de sistema: `is_legal_classification: false`. No se infiere high-
 - Art. 36 no se presenta solo.  
 - El DPD no firma la EIPD del responsable.  
 - Control plane: un proceso, memoria + JSONL reescribible — **no** es WORM ni multi-worker.  
+- SLOs: owner `unassigned` hasta asignación humana (obligatoria antes de producción); hash local no es evidencia forense; sin notificaciones; rate limit y API key siguen locales.  
 - Dataset Kaggle `ps_*`: se trata como competición anonimizada salvo prueba en contrario (considerando 26).  
 - Demo vs producción: clone limpio = UI + control plane + tests de gobernanza; predicción y métricas “de producción” requieren datos/artefactos locales no versionados.  
 - Pack estático `gdpr_dpia_v1.json` ≠ workspace EIPD editable; scores residuales del pack estático son **estimated pending verification**.
@@ -102,8 +104,11 @@ Huecos honestos (demo / laboratorio). Mitigaciones pragmáticas suben el listón
 2. **`approvals.json` es autoritativo y mutable** — Ver el audit trail ≠ impedir editar el ticket. `verify_against_audit()` (+ `APPROVAL_AUDIT_STRICT`) detecta desync obvio JSON↔audit; no hace inmutables los tickets. Producción: Postgres/Redis transaccional + audit append-only. `APPROVAL_BACKEND=memory|json` solamente (stubs `redis`/`postgres` — no implementados).
 3. **`STOP_FILE` es freno de emergencia, no transaccional** — Trabajo in-flight puede terminar después de crear el fichero. Predict: pre-check + post-check; si aparece a mitad, se devuelve resultado con `interrupted_by_stop=True` y audit `stop_during_execution`. Acciones export/external-effect: solo pre-check. `/predict` también pre-check en el borde API.
 4. **Detección de workers / réplicas es best-effort** — `WEB_CONCURRENCY` / `UVICORN_WORKERS` / `WORKERS` no ven réplicas horizontales (1 worker × N contenedores). Opcional `INSTANCE_ID` + `CONTROL_PLANE_LEASE_DIR` (TTL ~60s); con `CONTROL_PLANE_STRICT` y >1 instance IDs recientes → refuse start. Lease de FS barato — **no Redis**.
-5. **Rate limit es local** — `RATE_LIMIT_BACKEND=memory|disabled`. Sin backend compartido. Preferir disabled + gateway (nginx / Cloudflare / API Gateway / APIM).
-6. **API key estática** — Sin identidad, caducidad, revocación ni scopes. `APPROVAL_API_KEY` opcional para `/approvals/decide` y `APPROVAL_SEPARATE_ACTORS=true` (rechaza reviewer==requester) son demos de SoD — **sigue sin ser OIDC**.
+5. **Rate limit es local** — `RATE_LIMIT_BACKEND=memory|disabled`. Sin backend compartido. Preferir disabled + gateway (nginx / Cloudflare / API Gateway / APIM). El módulo SLO **no** cambia esto.
+6. **API key estática** — Sin identidad, caducidad, revocación ni scopes. `APPROVAL_API_KEY` opcional para `/approvals/decide` y `APPROVAL_SEPARATE_ACTORS=true` (rechaza reviewer==requester) son demos de SoD — **sigue sin ser OIDC**. El módulo SLO **no** cambia esto.
+7. **Owner SLO sigue `unassigned`** — Default de laboratorio correcto (no se inventa un DPD ni un model owner). Antes de producción hace falta **asignación humana**; `unassigned` no es un modelo operativo.
+8. **`evidence_integrity` SLO no es evidencia forense externa** — SHA-256 local del cuerpo del informe y de las refs. No es firma, no es WORM/KMS, y un tercero no puede tratarlo como integridad forense.
+9. **No hay routing de alertas SLO** — Condición, severidad, owner y plazo se escriben en JSON. No hay email, pager, Slack ni Teams.
 
 ### Límites de despliegue / no multi-worker safe
 
@@ -123,3 +128,5 @@ Detalle y orden de servicio operable: [`docs/ROADMAP_V2.md`](../ROADMAP_V2.md). 
 | Autoridad de aprobaciones | JSON mutable + chequeo desync | Postgres/Redis + audit append-only |
 | Rate limit multi-réplica | Limitador in-memory de demo | Límite en gateway; sin Redis aquí |
 | Evidencia vs efectividad | Campos de assurance en packs JSON | Owners operativos + tests de control calendados |
+| Owners SLO nombrados | Catálogo `owner` = `unassigned` | Asignar un humano antes de producción |
+| Routing de alertas SLO | Solo condición/plazo en JSON | Fuera de este módulo (no email / pager / chat) |

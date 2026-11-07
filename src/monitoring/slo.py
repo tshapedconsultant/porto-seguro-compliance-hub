@@ -3,6 +3,15 @@ Operational monitoring SLOs.
 
 Technical detection is not a business decision, a legal finding, or a
 discrimination conclusion. An alert cannot be marked resolved without evidence.
+
+Limitations (lab default, not production ops):
+- owner stays unassigned until a named human is recorded; required before
+  production — unassigned is not an on-call roster
+- evidence_integrity is a local SHA-256 checksum, not a signature, WORM store,
+  or external forensic evidence
+- this module does not change process-local rate limits or the static API key
+- no notification routing (email, pager, chat); JSON records conditions and
+  deadlines only
 """
 
 from __future__ import annotations
@@ -55,8 +64,10 @@ class SloValidationError(ValueError):
     """Raised when an SLO report or alert resolution is invalid."""
 
 
-# Internal screening catalog only. Thresholds are not legal limits. owner stays
-# "unassigned" until a named person is written in — never invent a DPO or model owner.
+# Internal screening catalog only. Thresholds are not legal limits.
+# owner stays "unassigned" until a named person is written in — never invent a
+# DPO or model owner. That is the correct lab default. Production requires a
+# named human assignment before go-live; unassigned is not an operating model.
 SLO_CATALOG: List[Dict[str, Any]] = [
     {
         "slo_id": "mon.ks_drift",
@@ -437,6 +448,8 @@ def build_monitoring_slo_report(
 
     Missing signals → not_evaluated (not a silent pass).
     The generator never emits status=resolved.
+    Does not send notifications (no email, pager, or chat).
+    Does not assign owners, change rate limits, or issue API keys.
     """
     now = _utc_now(generated_at)
     slos: List[Dict[str, Any]] = []
@@ -515,7 +528,11 @@ def build_monitoring_slo_report(
             "text": (
                 "SLOs are operational screens. An open alert is technical detection. "
                 "It is not a go-live decision, Art. 43 conformity result, or a finding "
-                "of discrimination."
+                "of discrimination. Owner stays unassigned until a named human is "
+                "recorded (required before production). evidence_integrity is a local "
+                "checksum, not a signature, WORM store, or external forensic evidence. "
+                "This module does not change process-local rate limits or the static "
+                "API key, and does not send notifications."
             ),
         },
         "catalog_ref": "src/monitoring/slo.py",
@@ -621,7 +638,11 @@ def artifact_hash_for(report: Mapping[str, Any]) -> str:
 
 
 def _attach_evidence_integrity(report: Mapping[str, Any]) -> Dict[str, Any]:
-    """Checksum + per-ref hashes. Not a cryptographic signature and not WORM."""
+    """Checksum + per-ref hashes.
+
+    Not a cryptographic signature, not WORM, and not external forensic evidence
+    a third party can rely on.
+    """
     out = dict(report)
     generated_at = str(out.get("generated_at") or _utc_now().isoformat())
     out.pop("evidence_integrity", None)

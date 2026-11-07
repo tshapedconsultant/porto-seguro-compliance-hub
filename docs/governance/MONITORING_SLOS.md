@@ -11,7 +11,7 @@ Generator: `src/monitoring/slo.py`
 Schema: `docs/schemas/monitoring_slo.schema.json` (`schema_version` **1.0.0**)  
 Alert sub-schema: `docs/schemas/monitoring_slo_alert.schema.json`
 
-`evidence_integrity` is a checksum of the report body (`artifact_hash`) plus per-ref hashes. It is **not** a signature, WORM store, or legal seal. If a path exists, the hash is of file bytes; otherwise it is the SHA-256 of the ref string (no invented file SHA).
+`evidence_integrity` is a checksum of the report body (`artifact_hash`) plus per-ref hashes. It is **not** a signature, WORM store, legal seal, or **external forensic evidence**. If a path exists, the hash is of file bytes; otherwise it is the SHA-256 of the ref string (no invented file SHA). A third party cannot treat this checksum as independent integrity proof.
 
 ## Alert fields
 
@@ -26,6 +26,17 @@ Alert sub-schema: `docs/schemas/monitoring_slo_alert.schema.json`
 | `status` | SLO: `not_evaluated` \| `within_slo` \| `breached`. Alert: `open` \| `acknowledged` \| `in_progress` \| `resolved` |
 
 `not_evaluated` is **not** `within_slo`. A missing shadow run or missing ECE is a gap.
+
+## Limitations
+
+These are in-scope gaps, not accidental omissions.
+
+| Limitation | Honest status |
+|---|---|
+| Owner stays `unassigned` | Correct lab default — never invent a DPO or model owner. A **named human must be assigned before production**. `unassigned` is not an on-call roster. |
+| Hash is not a signature or WORM | Already flagged on `evidence_integrity`. It is also **not external forensic evidence**: local SHA-256 only; no KMS, Object Lock, or third-party verify. |
+| Rate limit and API key stay local | This module does **not** change `RATE_LIMIT_BACKEND=memory\|disabled` or the static `API_KEY`. Intentional: SLO detection does not expand auth or gateway scope. |
+| No alert routing | Conditions, severity, owner, and deadlines are JSON records. Nothing is emailed, paged, or posted to Slack / Teams / PagerDuty. |
 
 ## Rules enforced in code
 

@@ -78,7 +78,7 @@ flowchart TB
 | **Inference API** | `python api_server.py` → `:8000` | `/predict` & `/batch_predict` wrapped by `execute_guarded` **in-process**; needs local artifacts for healthy inference |
 | **ML pipeline** | `run_training.py` / `run_training_full.py` | Polars → feature engineering → EBM → explainability → monitoring; needs Kaggle `train.csv` locally |
 | **CI governance job** | `.github/workflows/ci.yml` | Job `tests` (mandatory on every push/PR): control-plane + API security + monitoring SLOs. Job `ml-synthetic` only on ML path changes, weekly cron, or `workflow_dispatch` — **no** `continue-on-error`; if that job runs and fails, the workflow fails |
-| **Monitoring SLOs** | `src/monitoring/slo.py` · [`docs/governance/MONITORING_SLOS.md`](docs/governance/MONITORING_SLOS.md) | KS, performance, calibration, fairness, shadow, production gate. Detection ≠ business/legal decision; alerts cannot be resolved without evidence |
+| **Monitoring SLOs** | `src/monitoring/slo.py` · [`docs/governance/MONITORING_SLOS.md`](docs/governance/MONITORING_SLOS.md) | KS, performance, calibration, fairness, shadow, production gate. Detection ≠ decision. Owner `unassigned` until a human is named. Local hash ≠ forensic evidence. No notification routing. Does not change local rate limit / static API key |
 
 ### Walkthroughs (two cuts)
 
@@ -110,8 +110,11 @@ Honest gaps (demo / lab). Pragmatic mitigations raise the bar; they do **not** c
 2. **`approvals.json` is authoritative and mutable** — Audit trail visibility ≠ prevent ticket edit. `ApprovalStore.verify_against_audit()` (+ optional `APPROVAL_AUDIT_STRICT`) detects obvious JSON↔audit desync; it does not make tickets immutable. Production needs Postgres/Redis transactions + append-only audit. `APPROVAL_BACKEND=memory|json` only (`redis`/`postgres` are interface stubs — not implemented).
 3. **`STOP_FILE` is an emergency brake, not transactional** — In-flight work may finish after the file appears. Predict: pre-check + post-check; if the file appears mid-flight, result still returns with `interrupted_by_stop=True` and audit `stop_during_execution`. Export-like (external-effect) actions use pre-check only. API `/predict` also pre-checks at the edge.
 4. **Worker / replica detection is best-effort** — `WEB_CONCURRENCY` / `UVICORN_WORKERS` / `WORKERS` miss horizontal replicas (1 worker × N containers). Optional `INSTANCE_ID` + `CONTROL_PLANE_LEASE_DIR` FS heartbeats (TTL ~60s); with `CONTROL_PLANE_STRICT` and >1 recent distinct instance IDs → refuse start. Cheap filesystem lease — **not Redis**.
-5. **Rate limit is local** — `RATE_LIMIT_BACKEND=memory|disabled`. No shared backend. Prefer disabled + gateway (nginx / Cloudflare / API Gateway / APIM).
-6. **API key is static** — No identity, expiry, revocation, or scopes. Optional `APPROVAL_API_KEY` for `/approvals/decide` and `APPROVAL_SEPARATE_ACTORS=true` (reject reviewer==requester) are SoD demos — **still not OIDC**.
+5. **Rate limit is local** — `RATE_LIMIT_BACKEND=memory|disabled`. No shared backend. Prefer disabled + gateway (nginx / Cloudflare / API Gateway / APIM). The SLO module does **not** change this.
+6. **API key is static** — No identity, expiry, revocation, or scopes. Optional `APPROVAL_API_KEY` for `/approvals/decide` and `APPROVAL_SEPARATE_ACTORS=true` (reject reviewer==requester) are SoD demos — **still not OIDC**. The SLO module does **not** change this.
+7. **SLO owner stays `unassigned`** — Correct lab default (no invented DPO or model owner). A named human must be assigned **before production**; `unassigned` is not an operating model.
+8. **SLO `evidence_integrity` is not external forensic evidence** — SHA-256 of the report body plus per-ref hashes is a local checksum. It is **not** a cryptographic signature, **not** WORM / Object Lock / KMS, and **not** evidence a third party can treat as forensic integrity.
+9. **No SLO alert routing** — The module records condition, severity, owner, deadline, and evidence in JSON. It does **not** send email, pager, Slack, Teams, or any other notification.
 
 ### Deployment limits / not multi-worker safe
 
@@ -147,6 +150,8 @@ See **What this still is not** above. Additional IP trust note:
 - Formal EIPD submission / AEPD Art. 36 prior consultation
 - Processing a live insurance book or identifiable policyholders
 - WORM / Object Lock / KMS-signed audit (local JSONL + checkpoint only)
+- SLO alert routing (email / pager / Slack / Teams)
+- Treating SLO `evidence_integrity` as external forensic evidence
 
 ### Roadmap to production (P0 — not implemented here)
 
@@ -162,6 +167,8 @@ Short list. Full service roadmap (identity, shared state, durable evidence, ops,
 | Evidence vs effectiveness | Assurance fields on JSON packs | Operational owners + scheduled control tests |
 | Live book + signed EIPD | Kaggle `ps_*`; DPO sign-off hypothetical | Separate processing; unsigned workspace must not enable live `/predict` |
 | Artifact trust | SHA-256 sidecars; `REQUIRE_ARTIFACT_HASH` off by default | Authorized source + integrity vs a **protected** reference (sidecar ≠ provenance) |
+| Named SLO owners | Catalog `owner` is `unassigned` | Assign a named human before production |
+| SLO alert routing | JSON conditions and deadlines only | Out of this module (no email / pager / chat) |
 
 ---
 
@@ -279,7 +286,7 @@ Proxy-based bias audits when sensitive demographics cannot be collected under pr
 
 ### 5. Operational monitoring SLOs
 
-Six screens in `src/monitoring/slo.py`. An open alert is **technical detection**, not a go-live, Art. 43, or discrimination finding. `resolve_alert` requires evidence refs. `evidence_integrity` is a SHA-256 of the report body plus per-ref hashes — **not** a signature or WORM store. See [`docs/governance/MONITORING_SLOS.md`](docs/governance/MONITORING_SLOS.md).
+Six screens in `src/monitoring/slo.py`. An open alert is **technical detection**, not a go-live, Art. 43, or discrimination finding. `resolve_alert` requires evidence refs. See [`docs/governance/MONITORING_SLOS.md`](docs/governance/MONITORING_SLOS.md).
 
 | SLO | Condition (internal heuristic) | Severity | Deadline |
 |-----|--------------------------------|----------|----------|
@@ -290,7 +297,14 @@ Six screens in `src/monitoring/slo.py`. An open alert is **technical detection**
 | `mon.shadow_monitor` | Did not run, missing artifacts, or KS health check fired | medium | P2D |
 | `mon.production_gate` | `monitoring_passed` is false | critical | P1D |
 
-`not_evaluated` (no signal) is not `within_slo`. Owner is `unassigned` until a named person is recorded.
+`not_evaluated` (no signal) is not `within_slo`.
+
+**Limitations**
+
+- **Owner stays `unassigned`.** Correct as the lab default — the generator never invents a DPO or model owner. A named human must be assigned **before production**; `unassigned` is not an on-call roster.
+- **Hash is not a signature, not WORM, and not external forensic evidence.** `evidence_integrity` is a local SHA-256 of the report body plus per-ref hashes. It can detect a clumsy local edit. It is **not** a cryptographic signature, **not** Object Lock / WORM / KMS, and **not** evidence a third party can rely on as forensic integrity.
+- **Rate limit and API key stay local.** This module does not change `RATE_LIMIT_BACKEND=memory|disabled` or the static `API_KEY`. That is intentional: SLO detection does not expand the auth or gateway scope.
+- **No alert routing.** Conditions, severity, owner, and deadlines are written to JSON. Nothing is emailed, paged, or posted to Slack / Teams / PagerDuty. Closing a ticket in JSON is not the same as paging an owner.
 
 ```bash
 python -m pytest tests/test_monitoring_slos.py -q
@@ -320,7 +334,7 @@ porto-seguro/
 │   ├── 09_Governed_Decision_Demo.py
 │   └── 10_AEPD_EIPD_Demo.py        # EIPD ~90 s narrative (not Art. 36)
 ├── docs/governance/
-│   ├── MONITORING_SLOS.md          # SLO catalog, detection ≠ decision
+│   ├── MONITORING_SLOS.md          # SLO catalog, detection ≠ decision, limitations
 │   ├── DEMO_PLAYBOOK.md            # ES, AEPD-facing
 │   ├── DEMO_RECORDING_220.md       # How to record the two cuts
 │   └── demo_assets/                # architecture / lifecycle / hash-chain diagrams
